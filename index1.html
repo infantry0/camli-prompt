@@ -2438,8 +2438,9 @@ function copyPrompt() {
   }
   navigator.clipboard.writeText(final).then(()=>{
     const b=document.getElementById('copyBtn');
-    b.textContent='✅ 복사됨!';
-    setTimeout(()=>{b.textContent='📋 복사';},2000);
+    const origHTML = b.innerHTML;
+    b.innerHTML='✅ 복사됨!';
+    setTimeout(()=>{ b.innerHTML=origHTML; },2000);
   });
 }
 
@@ -2476,21 +2477,30 @@ window.addEventListener('message', function(e) {
   }
   if (e.data.type === 'CAM_RESET') resetAll();
 });
+
+// 선택 변경 시 부모에게 자동 전송
+// update()만 패치하면 selectSimple/togglePick/selectLens 등 updatePrompt()를 직접
+// 호출하는 경로가 누락되어 연출&포커스 이후 선택이 부모에 전달되지 않음.
+// updatePrompt()를 패치해야 모든 선택 경로를 커버할 수 있음.
+// CAM_SYNC payload는 index.html·index2.html이 실제로 사용하는 키만 명시적으로 추출
 (function() {
-  var _orig = updatePrompt;
+  const _origUpdatePrompt = updatePrompt;
   updatePrompt = function() {
-    _orig.apply(this, arguments);
-    try { 
-      const currentPrompt = buildPrompt();
-      // 부모에게 프롬프트 전달
-      parent.postMessage({ type: 'CAM_PROMPT', prompt: currentPrompt }, '*'); 
-      
-      // 부모에게 현재 카메라 상태(S) 전달 (이 코드가 핵심입니다)
-      parent.postMessage({ 
-        type: 'CAM_SYNC', 
-        payload: JSON.parse(JSON.stringify(S)) 
+    _origUpdatePrompt.apply(this, arguments);
+    try {
+      const prompt = buildPrompt();
+      parent.postMessage({ type: 'CAM_PROMPT', prompt }, '*');
+      parent.postMessage({
+        type: 'CAM_SYNC',
+        payload: {
+          dir:     S.dir     || null,
+          height:  S.height  || null,
+          tilt:    S.tilt    || null,
+          dist:    S.dist    || null,
+          persons: S.persons || null,
+        }
       }, '*');
-    } catch(e){}
+    } catch(_) {}
   };
 })();
 </script>
