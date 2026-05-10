@@ -1835,38 +1835,38 @@ S._shadowSuggestPrompt = '';
 update();
 
 // ── postMessage 브릿지 (통합 피커와 통신) ──
+// 핸들러를 하나로 통합, LIGHTING_AUTO_SYNC 오탈자 수정, 잘못된 상태 키 수정
 window.addEventListener('message', function(e) {
   if (!e.data) return;
+
   if (e.data.type === 'LIGHT_GET_PROMPT') {
     parent.postMessage({ type: 'LIGHT_PROMPT', prompt: buildPrompt() }, '*');
   }
+
   if (e.data.type === 'LIGHT_RESET') resetAll();
+
   if (e.data.type === 'CAM_STATE') {
     window.LightPicker.setCamState(e.data.state || {});
   }
-});
-// index2.html의 스크립트 하단에 추가
-(function() {
-  var _orig = updatePrompt;
-  updatePrompt = function() {
-    _orig.apply(this, arguments);
-    try { 
-      parent.postMessage({ type: 'LIGHT_PROMPT', prompt: buildPrompt() }, '*'); 
-    } catch(e){}
-  };
-})();
 
-// 부모가 계산해서 보내주는 자동 조명 설정 처리
-window.addEventListener('message', function(e) {
+  // 부모가 계산해서 보내주는 자동 조명 추천값 적용
+  // 수정: S.direction(없는 키) → S.dir, 핸들러 중복 제거, 즉시실행 () 오탈자 제거
   if (e.data.type === 'LIGHTING_AUTO_SYNC') {
     const auto = e.data.payload;
-    // index2의 내부 로직에 따라 S(상태)를 변경
-    if (auto.lightDirection) S.direction = auto.lightDirection;
-    if (auto.lightHeight) S.height = auto.lightHeight;
-    
-    update(); // UI 반영
-    updatePrompt(); // 프롬프트 갱신 및 부모 전송
+    if (auto.lightDirection) S.dir    = auto.lightDirection;
+    if (auto.lightHeight)    S.height = auto.lightHeight;
+    update();
+    try { parent.postMessage({ type: 'LIGHT_PROMPT', prompt: buildPrompt() }, '*'); } catch(_) {}
   }
+});
+
+// 선택 변경 시 부모에게 자동 전송 — 몽키패치 대신 update() 후미에 직접 연결
+(function() {
+  const _origUpdate = update;
+  update = function() {
+    _origUpdate.apply(this, arguments);
+    try { parent.postMessage({ type: 'LIGHT_PROMPT', prompt: buildPrompt() }, '*'); } catch(_) {}
+  };
 })();
 </script>
 </body>

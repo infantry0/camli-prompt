@@ -157,8 +157,8 @@ iframe{
 }
 .preview-toggle:hover{color:var(--text);border-color:var(--b3)}
 
-/* 분할뷰일 때 하단 바 공간 확보 */
-.workspace{padding-bottom:44px}
+/* 분할뷰일 때 하단 바 공간 확보 — transition으로 레이아웃 튀는 현상 방지 */
+.workspace{padding-bottom:44px;transition:padding-bottom .25s ease}
 .workspace.preview-expanded{padding-bottom:160px}
 </style>
 </head>
@@ -294,8 +294,32 @@ function switchTab(tab) {
 
 function loadSplit() {
   splitLoaded = true;
-  frames.camB().src = 'index1.html';
-  frames.lightB().src = 'index2.html';
+
+  const camB   = frames.camB();
+  const lightB = frames.lightB();
+
+  // 로드 완료 후 단독 탭 iframe에서 현재 프롬프트를 가져와 camPrompt/lightPrompt 보존
+  // 단독 탭이 이미 선택 상태를 가지고 있으므로 GET_PROMPT로 재요청
+  camB.addEventListener('load', function onCamBLoad() {
+    camB.removeEventListener('load', onCamBLoad);
+    // 단독 카메라 iframe에 현재 프롬프트 재요청 — 응답이 오면 camPrompt 갱신
+    postToFrame(frames.cam(), { type: 'CAM_GET_PROMPT' });
+    // 카메라 상태도 동기화
+    if (syncState.camera && Object.values(syncState.camera).some(Boolean)) {
+      postToFrame(camB, { type: 'CAM_STATE', state: syncState.camera });
+    }
+  }, { once: true });
+
+  lightB.addEventListener('load', function onLightBLoad() {
+    lightB.removeEventListener('load', onLightBLoad);
+    postToFrame(frames.light(), { type: 'LIGHT_GET_PROMPT' });
+    if (syncState.camera && Object.values(syncState.camera).some(Boolean)) {
+      postToFrame(lightB, { type: 'CAM_STATE', state: syncState.camera });
+    }
+  }, { once: true });
+
+  camB.src   = 'index1.html';
+  lightB.src = 'index2.html';
 }
 
 // ── 통신 및 동기화 핵심 (index0 개선형) ──────────────────────────────────────────
@@ -340,26 +364,36 @@ window.addEventListener('message', function(e) {
   const data = e.data;
 
   // 1. 카메라(index1)에서 신호가 왔을 때
+  // 빈 프롬프트(분할 iframe 초기 로드 직후)는 기존 값을 덮어쓰지 않음
   if (data.type === 'CAM_PROMPT') {
-    camPrompt = data.prompt || '';
+    if (data.prompt) camPrompt = data.prompt;
     updatePreview();
   }
 
   if (data.type === 'CAM_SYNC') {
+    // syncState.camera 갱신 — buildLightingSync가 실제 값을 읽을 수 있도록 먼저 갱신
+    const p = data.payload || {};
+    syncState.camera = {
+      direction: p.dir      || null,
+      height:    p.height   || null,
+      tilt:      p.tilt     || null,
+      distance:  p.dist     || null,
+      persons:   p.persons  || null,
+    };
+
     // index1이 보낸 S값을 index2가 원하는 'CAM_STATE'로 즉시 전달
-    const relayData = { type: 'CAM_STATE', state: data.payload };
-    
-    // 단일 뷰와 분할 뷰의 모든 조명 피커에 전달
+    const relayData = { type: 'CAM_STATE', state: p };
     if (frames.light()) postToFrame(frames.light(), relayData);
     if (splitLoaded && frames.lightB()) postToFrame(frames.lightB(), relayData);
-    
-    // (선택 사항) 부모 창의 자체 추천 로직 실행
-    syncLightingFromCamera(); 
+
+    // 부모 창의 자체 추천 로직 실행
+    syncLightingFromCamera();
   }
 
   // 2. 조명(index2)에서 신호가 왔을 때
+  // 빈 프롬프트(분할 iframe 초기 로드 직후)는 기존 값을 덮어쓰지 않음
   if (data.type === 'LIGHT_PROMPT') {
-    lightPrompt = data.prompt || '';
+    if (data.prompt) lightPrompt = data.prompt;
     updatePreview();
   }
 });
@@ -399,10 +433,11 @@ function copyPrompt(type) {
   navigator.clipboard.writeText(text).then(() => {
     const btnId = {cam:'btnCopyCam', light:'btnCopyLight', both:'btnCopyBoth'}[type];
     const btn = document.getElementById(btnId);
+    // textContent 대신 data-label 속성에 원본 저장 후 복원 — 아이콘 깜빡임 방지
+    const origHTML = btn.innerHTML;
     btn.classList.add('flash');
-    const orig = btn.textContent;
-    btn.textContent = '✓ 복사됨';
-    setTimeout(() => { btn.classList.remove('flash'); btn.textContent = orig; }, 1500);
+    btn.innerHTML = '✓ 복사됨';
+    setTimeout(() => { btn.classList.remove('flash'); btn.innerHTML = origHTML; }, 1500);
   });
 }
 
@@ -433,7 +468,9 @@ function togglePreview() {
     const container = document.getElementById('viewBoth');
     const total = container.getBoundingClientRect().width - resizer.offsetWidth;
     const newLeft = Math.min(Math.max(leftW + dx, total * 0.2), total * 0.8);
-    pLeft.style.flex = 'none'; pLeft.style.width = newLeft + 'px';
+    const newRight = total - newLeft;
+    pLeft.style.flex = 'none';  pLeft.style.width  = newLeft  + 'px';
+    pRight.style.flex = 'none'; pRight.style.width = newRight + 'px';
   });
 
   document.addEventListener('mouseup', () => {
