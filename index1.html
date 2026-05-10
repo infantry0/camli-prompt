@@ -1,0 +1,2498 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>카메라 포지션 선택기 v260507</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#090d13;--s1:#111622;--s2:#181f2e;--s3:#1e2840;
+  --b1:#1e2840;--b2:#2a3650;--b3:#3a4a6a;
+  --text:#cdd6f4;--muted:#6272a4;--dim:#3a4060;
+  --acc:#7aa2f7;--acc2:#bb9af7;--grn:#9ece6a;--yel:#e0af68;--red:#f7768e;--cyn:#7dcfff;
+  --ok:rgba(122,162,247,0.15);--ok-b:#7aa2f7;
+  --warn:rgba(224,175,104,0.12);--warn-b:#e0af68;
+  --r:7px;--r2:11px;
+}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:13px;padding:18px;max-width:1100px;margin:0 auto}
+
+.hd{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+.hd h1{font-size:16px;font-weight:700}
+.badge{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);background:var(--s2);border:1px solid var(--b1);border-radius:4px;padding:1px 7px}
+.sub{color:var(--muted);font-size:11px;margin-bottom:16px}
+
+/* flow */
+.flow{display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.flow-step{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.flow-step .num{width:20px;height:20px;border-radius:50%;border:1px solid var(--b2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.flow-step.active .num{background:var(--acc);border-color:var(--acc);color:#0a0f1e}
+.flow-step.active{color:var(--text)}
+.flow-step.done .num{background:var(--grn);border-color:var(--grn);color:#0a0f1e}
+.flow-arr{color:var(--dim);font-size:12px}
+
+/* panel */
+.panel{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);padding:14px 16px;margin-bottom:12px}
+.panel.locked{opacity:.35;pointer-events:none}
+.ptitle{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.ptitle::after{content:'';flex:1;height:1px;background:var(--b1)}
+.ptitle .step-n{color:var(--acc);font-family:'JetBrains Mono',monospace}
+
+/* 거리 — 4그룹 × 각 그룹 내 버튼 */
+.dist-groups{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.dist-group{background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);padding:8px}
+.dist-group-label{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid var(--b1)}
+.dist-btns{display:flex;flex-direction:column;gap:4px}
+
+/* 공통 버튼 */
+.btn{background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);padding:7px 8px;cursor:pointer;text-align:center;transition:border-color .12s,background .12s;user-select:none;position:relative;width:100%}
+.btn:hover{border-color:var(--b3);background:var(--s3)}
+.btn.sel{border-color:var(--ok-b);background:var(--ok)}
+.btn.disabled{opacity:.22;pointer-events:none}
+.btn.warn-state{border-color:var(--warn-b)!important}
+.btn .la{font-size:11px;font-weight:700;display:block}
+.btn .su{font-size:9px;color:var(--muted);margin-top:1px;display:block}
+.btn .em{font-size:15px;display:block;margin-bottom:3px}
+.btn .ctag{position:absolute;top:3px;right:4px;font-size:8px;font-family:'JetBrains Mono',monospace;border-radius:3px;padding:1px 4px}
+.tag-ok{background:rgba(158,206,106,.18);color:var(--grn)}
+.tag-warn{background:rgba(224,175,104,.18);color:var(--yel)}
+.tag-no{background:rgba(247,118,142,.15);color:var(--red)}
+
+/* direction / height grid */
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+/* 높이 그리드: 10단계 + 그룹 레이블 */
+#heightGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;align-items:start}
+.dir-btn,.ht-btn{padding:9px 6px}
+
+/* rec chips */
+.rec-section{margin-bottom:12px}
+.rec-title{font-size:10px;font-weight:700;color:var(--cyn);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;display:flex;align-items:center;gap:5px}
+.rec-title::before{content:'▶';font-size:8px}
+.rec-list{display:flex;flex-wrap:wrap;gap:5px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:5px;font-size:11px;cursor:pointer;border:1px solid;transition:all .12s;user-select:none;font-family:'JetBrains Mono',monospace}
+.chip.c-ok{background:rgba(122,162,247,.1);border-color:rgba(122,162,247,.35);color:var(--acc)}
+.chip.c-ok:hover,.chip.c-ok.sel{background:rgba(122,162,247,.22);border-color:var(--acc)}
+.chip.c-warn{background:rgba(224,175,104,.08);border-color:rgba(224,175,104,.3);color:var(--yel)}
+.chip.c-warn:hover,.chip.c-warn.sel{background:rgba(224,175,104,.18);border-color:var(--yel)}
+.chip.c-all{background:rgba(187,154,247,.08);border-color:rgba(187,154,247,.28);color:var(--acc2)}
+.chip.c-all:hover,.chip.c-all.sel{background:rgba(187,154,247,.18);border-color:var(--acc2)}
+.chip-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dot-ok{background:var(--grn)}.dot-warn{background:var(--yel)}.dot-all{background:var(--acc2)}
+
+/* legend */
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:10px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:4px}
+.ld{width:8px;height:8px;border-radius:2px}
+
+/* result */
+.result{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);padding:14px 16px}
+.res-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap}
+.res-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+.sel-tags{display:flex;flex-wrap:wrap;gap:5px}
+.sel-tag{font-family:'JetBrains Mono',monospace;font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid var(--b2);background:var(--s2);color:var(--cyn)}
+.prompt-out{background:var(--bg);border:1px solid var(--b2);border-radius:var(--r);padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--grn);min-height:50px;word-break:break-all;white-space:pre-wrap;line-height:1.7;margin-bottom:10px}
+.prompt-out.empty{color:var(--dim);font-style:italic;font-family:'Noto Sans KR',sans-serif;font-size:12px}
+.btn-row{display:flex;gap:8px}
+.btn-copy{flex:1;background:var(--acc);color:#07111f;border:none;border-radius:var(--r);padding:10px;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s}
+.btn-copy:hover{background:var(--acc2)}
+.btn-reset{background:transparent;color:var(--muted);border:1px solid var(--b2);border-radius:var(--r);padding:10px 16px;font-family:'Noto Sans KR',sans-serif;font-size:12px;cursor:pointer;transition:all .13s}
+.btn-reset:hover{border-color:var(--red);color:var(--red)}
+.hint{margin-top:8px;font-size:10px;color:var(--dim);font-family:'JetBrains Mono',monospace}
+.hint span{color:var(--yel)}
+.focus-sub-title{font-size:10px;font-weight:700;color:var(--muted);margin-bottom:6px;margin-top:4px}
+.focus-hint{font-size:9px;font-weight:400;color:var(--dim);margin-left:6px;font-family:'JetBrains Mono',monospace}
+/* lang toggle */
+.lang-toggle{display:flex;align-items:center;gap:0;border:1px solid var(--b2);border-radius:6px;overflow:hidden;margin-left:auto}
+.lang-btn{padding:3px 10px;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .12s}
+.lang-btn.active{background:var(--acc);color:#07111f}
+.lang-btn:first-child{border-right:1px solid var(--b2)}
+
+/* 다이나믹 프롬프트 인라인 선택 */
+.dyn-wrap{display:inline-flex;align-items:center;gap:2px;background:rgba(125,207,255,.08);border:1px solid rgba(125,207,255,.3);border-radius:5px;padding:1px 3px;margin:0 1px;vertical-align:middle;cursor:default}
+.dyn-label{font-size:8px;color:var(--acc);font-weight:700;padding:0 3px 0 1px;opacity:.7;user-select:none}
+.dyn-opt{font-size:11px;padding:2px 6px;border-radius:3px;cursor:pointer;color:var(--muted);transition:all .12s;user-select:none;white-space:nowrap}
+.dyn-opt:hover{color:var(--fg);background:rgba(125,207,255,.15)}
+.dyn-opt.dyn-sel{background:rgba(125,207,255,.25);color:var(--acc);font-weight:600}
+.dyn-sep{font-size:9px;color:var(--muted);opacity:.5;user-select:none}
+.prompt-out-rich{white-space:pre-wrap;word-break:break-all;line-height:1.8}
+
+/* 거리 붕괴 방지 세트 */
+.lock-set-btn{background:rgba(247,118,142,.08);border:1px solid rgba(247,118,142,.35);border-radius:var(--r);padding:8px 12px;cursor:pointer;text-align:left;transition:all .15s;user-select:none;display:flex;align-items:center;gap:10px;width:100%;margin-bottom:8px}
+.lock-set-btn:hover{background:rgba(247,118,142,.18);border-color:var(--red)}
+.lock-set-btn.active{background:rgba(247,118,142,.22);border-color:var(--red);box-shadow:0 0 0 1px var(--red)}
+.lock-set-icon{font-size:18px;flex-shrink:0}
+.lock-set-body{flex:1}
+.lock-set-title{font-size:12px;font-weight:700;color:var(--red);margin-bottom:2px}
+.lock-set-desc{font-size:10px;color:var(--muted)}
+.lock-set-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+.lock-tag{font-family:'JetBrains Mono',monospace;font-size:9px;padding:1px 6px;border-radius:3px;background:rgba(247,118,142,.12);border:1px solid rgba(247,118,142,.3);color:var(--red)}
+/* aspect ratio */
+.ar-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.ar-btn{padding:8px 4px}
+.ar-preview{width:100%;margin:0 auto 4px;background:var(--b2);border-radius:3px;display:block}
+
+/* 인원 패널 */
+.persons-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.person-btn{background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);padding:12px 8px;cursor:pointer;text-align:center;transition:all .15s;user-select:none}
+.person-btn:hover{border-color:var(--b3);background:var(--s3)}
+.person-btn.sel{border-color:var(--acc2);background:rgba(187,154,247,.12)}
+.person-btn .pb-em{font-size:20px;display:block;margin-bottom:4px}
+.person-btn .pb-la{font-size:12px;font-weight:700;display:block}
+.person-btn .pb-su{font-size:9px;color:var(--muted);margin-top:2px;display:block}
+/* 관계/포커스 패널 */
+.rel-section{margin-top:12px}
+.rel-section-title{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;display:flex;align-items:center;gap:6px}
+.rel-section-title::after{content:'';flex:1;height:1px;background:var(--b1)}
+.multi-badge{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-family:'JetBrains Mono',monospace;color:var(--acc2);background:rgba(187,154,247,.12);border:1px solid rgba(187,154,247,.28);border-radius:3px;padding:1px 6px;margin-left:6px}
+
+@media(max-width:700px){
+  .dist-groups{grid-template-columns:repeat(2,1fr)}
+  .g4{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .ar-grid{grid-template-columns:repeat(3,1fr)}
+}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <h1>📷 카메라 포지션 선택기</h1>
+  <span class="badge">v2.5 — Prompt 역할 조립 · Crop Anchor · Vertical Placement</span>
+  <div class="lang-toggle" style="margin-left:8px">
+    <button class="lang-btn active" id="btnEN" onclick="setLang('en')">EN</button>
+    <button class="lang-btn" id="btnKR" onclick="setLang('kr')">KR</button>
+  </div>
+</div>
+<p class="sub">거리(프레이밍) → 방향 → 높이 순으로 선택하면 충돌 없는 조합이 자동 추천됩니다.</p>
+
+<div class="flow">
+  <div class="flow-step active" id="fs1"><span class="num">1</span>거리</div>
+  <span class="flow-arr">›</span>
+  <div class="flow-step" id="fs2"><span class="num">2</span>방향</div>
+  <span class="flow-arr">›</span>
+  <div class="flow-step" id="fs3"><span class="num">3</span>높이</div>
+  <span class="flow-arr">›</span>
+  <div class="flow-step" id="fs4"><span class="num">4</span>포커스</div>
+  <span class="flow-arr">›</span>
+  <div class="flow-step" id="fs5"><span class="num">5</span>권장 조합</div>
+  <span class="flow-arr">›</span>
+  <div class="flow-step" id="fs6"><span class="num">6</span>비율</div>
+</div>
+
+<div class="legend">
+  <span><span class="ld" style="background:var(--grn)"></span>권장</span>
+  <span><span class="ld" style="background:var(--yel)"></span>주의</span>
+  <span><span class="ld" style="background:var(--red)"></span>충돌·비활성</span>
+  <span><span class="ld" style="background:var(--acc2)"></span>범용</span>
+</div>
+
+<!-- PERSONS 패널 -->
+<div class="panel" id="pPersons">
+  <div class="ptitle"><span class="step-n" style="color:var(--acc2)">👥</span> 인원 설정 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">2인 이상 시 관계 구도 / 초점 대상 활성화</span></div>
+  <div class="persons-grid">
+    <div class="person-btn" id="pb1" onclick="selectPersons(1)">
+      <span class="pb-em">🧍</span><span class="pb-la">1인</span><span class="pb-su">기본 모드</span>
+    </div>
+    <div class="person-btn" id="pb2" onclick="selectPersons(2)">
+      <span class="pb-em">🧍🧍</span><span class="pb-la">2인</span><span class="pb-su">관계 구도 활성</span>
+    </div>
+    <div class="person-btn" id="pb3" onclick="selectPersons(3)">
+      <span class="pb-em">👥+</span><span class="pb-la">3인+</span><span class="pb-su">그룹 구도 활성</span>
+    </div>
+  </div>
+  <div id="rel2Panel" style="display:none">
+    <div class="rel-section"><div class="rel-section-title">관계 구도 <span class="multi-badge">2인</span></div><div class="g4" id="relGrid"></div></div>
+    <div class="rel-section"><div class="rel-section-title">초점 대상 <span class="multi-badge">2인</span></div><div class="g4" id="focusSubjectGrid"></div></div>
+    <div class="rel-section"><div class="rel-section-title">시선 관계 <span class="multi-badge">2인</span></div><div class="g4" id="gazeRelGrid"></div></div>
+  </div>
+  <div id="rel3Panel" style="display:none">
+    <div class="rel-section"><div class="rel-section-title">그룹 구도 <span class="multi-badge">3인+</span></div><div class="g4" id="groupComposGrid"></div></div>
+  </div>
+</div>
+
+<!-- STEP 1: 거리 -->
+<div class="panel" id="pDist">
+  <div class="ptitle"><span class="step-n">01</span> 거리 / 프레이밍</div>
+  <div class="dist-groups" id="distGrid"></div>
+</div>
+
+<!-- STEP 2: 방향 -->
+<div class="panel locked" id="pDir">
+  <div class="ptitle"><span class="step-n">02</span> 방향 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">피사체 기준</span></div>
+  <div class="g4" id="dirGrid"></div>
+</div>
+
+<!-- STEP 3: 높이 -->
+<div class="panel locked" id="pHeight">
+  <div class="ptitle"><span class="step-n">03</span> 높이 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">카메라 수직 위치</span></div>
+  <div class="g3" id="heightGrid"></div>
+</div>
+
+<!-- STEP 3.5: 틸트 -->
+<div class="panel locked" id="pTilt">
+  <div class="ptitle"><span class="step-n">03.5</span> 틸트 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">렌즈가 향하는 방향 — 높이와 별개</span></div>
+  <div class="g3" id="tiltGrid"></div>
+  <div id="tiltHint" style="font-size:10px;color:var(--dim);font-family:'JetBrains Mono',monospace;margin-top:7px"></div>
+</div>
+
+<!-- STEP 3.5: 포커스 -->
+<div class="panel locked" id="pFocus">
+  <div class="ptitle"><span class="step-n">04</span> 연출 &amp; 포커스 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">선택 사항</span></div>
+
+  <div class="focus-sub-title">📍 포커스 포인트 — 어디가 선명한가</div>
+  <div class="g4" id="focusGrid"></div>
+  <div id="focusChips" style="margin-top:6px;margin-bottom:12px"></div>
+
+  <div class="focus-sub-title">👁️ 시선 처리 — 피사체의 시선 방향 <span class="focus-hint">face 포커스 시 권장</span></div>
+  <div class="g4" id="gazeGrid"></div>
+
+  <div class="focus-sub-title" style="margin-top:12px">📐 포커스 플레인 — 선명한 곳의 거리감</div>
+  <div class="g4" id="planeGrid"></div>
+  <div id="planeChips" style="margin-top:6px;margin-bottom:12px"></div>
+
+  <div class="focus-sub-title">🔭 렌즈 효과 — 광학적 왜곡 / 원근 연출 <span class="focus-hint">같은 '왜곡'이라도 방향이 다름</span></div>
+  <div class="g4" id="lensGrid"></div>
+  <div id="lensChips" style="margin-top:6px;margin-bottom:12px"></div>
+
+  <div class="focus-sub-title">▣ 프레이밍 밀도 — 화면 안 여백과 배치 <span class="focus-hint">같은 full body라도 결과가 달라짐</span></div>
+  <div class="g4" id="densityGrid"></div>
+  <div id="densityChips" style="margin-top:6px;margin-bottom:12px"></div>
+
+  <div class="focus-sub-title">✂️ 자르기 기준 (Crop Anchor) — 어느 쪽을 보장하고 어디를 자를지 <span class="focus-hint">프레이밍 범위와 함께 사용</span></div>
+  <div class="g5" id="cropAnchorGrid"></div>
+
+  <div class="focus-sub-title" style="margin-top:12px">↕ 수직 배치 (Vertical Placement) — 피사체가 프레임 어느 높이에 위치하는가</div>
+  <div class="g5" id="verticalPlacementGrid"></div>
+
+  <div class="focus-sub-title" style="margin-top:12px">🎬 카메라 안정성 — 촬영 방식의 질감 <span class="focus-hint">handheld 두 종류는 강도가 다름</span></div>
+  <div class="g5" id="stabilityGrid"></div>
+
+  <div class="focus-sub-title" style="margin-top:12px">🧍 피사체 상태 — AI 자세 고정용</div>
+  <div class="g4" id="poseGrid"></div>
+</div>
+
+<!-- STEP 5: 권장 조합 -->
+<div class="panel locked" id="pRec">
+  <div class="ptitle"><span class="step-n">05</span> 권장 조합 선택</div>
+  <div id="recContent"></div>
+</div>
+
+<!-- 거리 붕괴 방지 세트 -->
+<div class="panel" id="pLockSet">
+  <div class="ptitle"><span class="step-n" style="color:var(--red)">🔒</span> 거리 붕괴 방지 세트 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">AI가 카메라를 멀리 빼는 것 방지</span></div>
+  <button class="lock-set-btn" id="lockSetBtn" onclick="toggleLockSet()">
+    <span class="lock-set-icon">🛡️</span>
+    <div class="lock-set-body">
+      <div class="lock-set-title">Distance Lock + Foreground Anchor + Depth Separation</div>
+      <div class="lock-set-desc">세트로 삽입 — 하나라도 빠지면 효과 약해짐</div>
+      <div class="lock-set-tags">
+        <span class="lock-tag">camera distance fixed relative to subject, no zooming out</span>
+        <span class="lock-tag">foreground element very close to lens, slightly blurred</span>
+        <span class="lock-tag">clear depth separation between foreground, subject, and background</span>
+      </div>
+    </div>
+  </button>
+</div>
+
+<!-- STEP 6: Aspect Ratio -->
+<div class="panel" id="pAR">
+  <div class="ptitle"><span class="step-n">06</span> Aspect Ratio <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">프레이밍 보조 — 선택 사항</span></div>
+  <div class="ar-grid" id="arGrid"></div>
+</div>
+
+<!-- 결과 -->
+<div class="result">
+  <div class="res-top">
+    <span class="res-label">출력 프롬프트</span>
+    <div class="sel-tags" id="selTags"></div>
+  </div>
+  <div class="prompt-out empty" id="promptOut">거리(프레이밍)부터 선택해 주세요.</div>
+  <div id="langNote" style="font-size:10px;color:var(--muted);margin-bottom:8px;font-family:'JetBrains Mono',monospace;display:none">
+    ※ 복사되는 내용은 항상 <span style="color:var(--acc)">EN(영문)</span> 프롬프트입니다.
+  </div>
+  <div class="btn-row">
+    <button class="btn-copy" id="copyBtn" onclick="copyPrompt()">📋 복사</button>
+    <button class="btn-reset" onclick="resetAll()">↺ 초기화</button>
+  </div>
+  <div class="hint">RNG 통합: <span>window.CamPicker.getPrompt()</span> | <span>window.CamPicker.getState()</span></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   데이터 — _data.py의 framings와 동일한 12개 명칭 사용
+═══════════════════════════════════════════════════════ */
+
+// 거리 그룹 (4그룹 × 각 3개 = 12개)
+const DIST_GROUPS = [
+  {
+    group: 'Very Close', label: 'Very Close', color: '#f7768e',
+    items: [
+      { id:'macro',   label:'Macro / Detail Shot', sub:'솜털·모공 수준',    type:'distance', prompt:'macro focus shot, extreme detail',    promptFull:'captured as a macro detail shot, extreme close-up of surface detail',    kr:'매크로 포커스 샷, 극도의 디테일 강조' },
+      { id:'ecu',     label:'Extreme Close-up',    sub:'눈·입술·부위 강조', type:'distance', prompt:'extreme close-up (ECU)',              promptFull:'captured as an extreme close-up, single facial feature fills the frame',  kr:'익스트림 클로즈업' },
+      { id:'tight',   label:'Tight Close-up',      sub:'얼굴 전체 채움',    type:'distance', prompt:'tight close-up',                     promptFull:'captured as a tight close-up, face fills the frame',                     kr:'타이트 클로즈업' },
+    ]
+  },
+  {
+    group: 'Close', label: 'Close', color: '#e0af68',
+    items: [
+      { id:'headshot',  label:'Headshot',      sub:'얼굴+어깨',   type:'distance', prompt:'headshot',      promptFull:'captured as a headshot, framed from head to upper shoulders',              kr:'헤드샷' },
+      { id:'portrait',  label:'Portrait Shot', sub:'가슴 위',     type:'distance', prompt:'portrait shot', promptFull:'captured as a portrait shot, framed from head to chest',                   kr:'포트레이트 샷' },
+      { id:'bust',      label:'Bust Shot',     sub:'가슴 윗부분', type:'distance', prompt:'bust shot',     promptFull:'captured as a bust shot, framed from head to upper chest',                 kr:'버스트 샷' },
+    ]
+  },
+  {
+    group: 'Medium', label: 'Medium', color: '#7aa2f7',
+    items: [
+      { id:'upperbody', label:'Upper Body Shot', sub:'무릎 위',  type:'framing', prompt:'upper body shot, knee shot',  promptFull:'framed from head to knees, upper body shot with knee-level cutoff',       kr:'상반신 샷, 무릎 위' },
+      { id:'waistup',   label:'Waist-up Shot',   sub:'허리 위',  type:'framing', prompt:'waist-up shot',               promptFull:'framed from head to waist, waist-up composition',                         kr:'허리 위 샷' },
+      { id:'medium',    label:'Medium Shot',     sub:'MCU·상체', type:'framing', prompt:'medium close-up (MCU)',        promptFull:'framed as a medium close-up, head to mid-torso visible',                  kr:'미디엄 클로즈업' },
+    ]
+  },
+  {
+    group: 'Far', label: 'Far', color: '#9ece6a',
+    items: [
+      { id:'fullbody', label:'Full Body Shot',         sub:'전신',        type:'constraint', prompt:'full body shot',                   promptFull:'full body remains within frame, head to feet fully visible, no cropping',  kr:'전신 샷' },
+      { id:'envport',  label:'Environmental Portrait', sub:'롱샷·관찰',   type:'constraint', prompt:'long shot, environmental portrait', promptFull:'full body within frame, environmental context visible around subject',     kr:'롱샷, 환경 포트레이트' },
+      { id:'wide',     label:'Wide Shot',              sub:'와이드·딥샷', type:'constraint', prompt:'wide shot, deep shot',             promptFull:'wide shot, subject and full environment remain within frame, no cropping',  kr:'와이드 샷, 딥샷' },
+    ]
+  },
+];
+
+// 방향
+const DIR = [
+  { id:'front',    label:'정면',  sub:'Front',    em:'🧍',  type:'angle', prompt:'front-facing, facing camera',                  kr:'정면, 카메라를 바라보는 구도' },
+  { id:'side',     label:'측면',  sub:'Side',     em:'👣',  type:'angle', prompt:'side profile view',                            kr:'측면 프로필 뷰' },
+  { id:'rear',     label:'후면',  sub:'Rear',     em:'🔙',  type:'angle', prompt:'from directly behind subject',                 kr:'피사체 정후방에서 촬영' },
+  { id:'diagonal', label:'대각',  sub:'Diagonal', em:'↗️', type:'angle', prompt:'angled from front corner, slightly off-center', kr:'전면 코너에서 비스듬히, 약간 축 벗어남' },
+];
+
+// 높이 — 10단계 세분화 (수치 + 신체 기준점 조합)
+// ※ 그룹별로 묶어서 UI 표시
+const HEIGHT_GROUPS = [
+  {
+    group: 'low', label: '로우 계열', color: '#f7768e',
+    items: [
+      {
+        id:'ground', label:'극저', type:'angle', sub:'바닥·0~10cm', em:'🪱',
+        prompt:'camera flat on ground, ground-level shot, camera at 0-10cm height, lens angled upward, looking up at subject',
+        kr:'극저 — 바닥 카메라 (0~10cm), 렌즈 위를 향함',
+        heightVal: 0,
+      },
+      {
+        id:'ankle',  label:'발목~무릎', type:'angle', sub:'30~60cm', em:'🦶',
+        prompt:'camera at ankle to knee height, 30-60cm from ground, tilted up toward subject, low upward angle',
+        kr:'발목~무릎 높이 (30~60cm), 위를 향한 앵글',
+        heightVal: 45,
+      },
+      {
+        id:'knee',   label:'무릎~골반', type:'angle', sub:'60~90cm', em:'🦵',
+        prompt:'camera at knee to hip height, 60-90cm from ground, upward angle, looking up at subject',
+        kr:'무릎~골반 높이 (60~90cm), 상향 앵글',
+        heightVal: 75,
+      },
+    ]
+  },
+  {
+    group: 'eye', label: '아이레벨 계열', color: '#7aa2f7',
+    items: [
+      {
+        id:'chest',  label:'흉부~어깨', type:'angle', sub:'90~130cm', em:'🫀',
+        prompt:'camera at chest to shoulder height, approximately 90-130cm from ground',
+        kr:'흉부~어깨 높이 (90~130cm)',
+        heightVal: 110,
+      },
+      {
+        id:'eye',    label:'아이레벨', type:'angle', sub:'150~170cm', em:'👁',
+        prompt:'eye level shot, camera at eye level, approximately 150-170cm from ground',
+        kr:'아이레벨 — 눈높이 (150~170cm)',
+        heightVal: 160,
+      },
+      {
+        id:'head',   label:'머리 위', type:'angle', sub:'170~200cm', em:'🙆',
+        prompt:'camera just above head level, slightly elevated at 170-200cm, gentle downward angle',
+        kr:'머리 바로 위 (170~200cm) — 살짝 내려다보는 각도',
+        heightVal: 185,
+      },
+    ]
+  },
+  {
+    group: 'high', label: '하이 계열', color: '#9ece6a',
+    items: [
+      {
+        id:'gentle_high', label:'약간 하이', type:'angle', sub:'2~3m', em:'🪜',
+        prompt:'slightly elevated high angle, camera at 2-3 meters, gentle downward perspective',
+        kr:'약간 높은 하이 앵글 (2~3m) — 완만한 내려다보기',
+        heightVal: 250,
+      },
+      {
+        id:'mid_high',    label:'2층 높이', type:'angle', sub:'3~5m', em:'🏠',
+        prompt:'mid-high angle, camera at second floor height, 3-5 meters above ground, looking down',
+        kr:'2층 높이 하이 앵글 (3~5m) — 창문·발코니에서 내려다보는 느낌',
+        heightVal: 400,
+      },
+      {
+        id:'elevated',    label:'고공', type:'angle', sub:'5~15m', em:'🌲',
+        prompt:'elevated high angle, camera at 5-15 meters, tree or rooftop level, steep downward angle',
+        kr:'고공 하이 앵글 (5~15m) — 나무·옥상 높이',
+        heightVal: 1000,
+      },
+      {
+        id:'overhead',    label:'오버헤드', type:'angle', sub:'직상방 수직', em:'🛸',
+        prompt:'overhead shot, camera directly above subject, top-down view, bird\'s eye perspective',
+        kr:'오버헤드 — 피사체 바로 위 수직 하강 시점',
+        heightVal: 9999,
+      },
+    ]
+  },
+];
+
+// 플랫 배열 (기존 코드 호환용)
+const HEIGHT = HEIGHT_GROUPS.flatMap(g => g.items);
+
+// 틸트 — 렌즈가 향하는 방향 (높이와 독립적인 축)
+// ※ height는 카메라의 물리적 위치, tilt는 렌즈의 방향
+const TILT = [
+  {
+    id:'tilt_up', label:'상향', type:'angle', sub:'렌즈가 위를 향함', em:'⬆️',
+    prompt:'camera tilted up, lens angled upward, looking up at subject',
+    kr:'상향 틸트 — 렌즈가 위를 향해 피사체를 올려다봄',
+    // HEIGHT별 자연스러운 조합
+    natural: ['ground','ankle','knee','chest'],   // 이 높이에서 자연스러움
+    warn:    ['mid_high','elevated','overhead'],  // 이 높이에서 어색
+    no:      [],
+    // 조합 설명
+    combos: {
+      ground: "worm's-eye view — 가장 극단적인 상향 시점",
+      ankle:  '발목 높이에서 위를 향해 — 역동적 원근감',
+      knee:   '무릎~골반에서 올려다보기 — 인물 압도감',
+      chest:  '흉부 높이에서 약간 올려다보기 — 자연스러운 위압감',
+      eye:    '아이레벨에서 살짝 상향 — 미묘한 올려보기',
+    }
+  },
+  {
+    id:'tilt_level', label:'수평', type:'angle', sub:'렌즈가 정면을 향함', em:'➡️',
+    prompt:'camera level, lens pointing straight ahead, horizontal framing',
+    kr:'수평 틸트 — 렌즈가 정면을 향함 (기본값)',
+    natural: ['chest','eye','head','gentle_high'],
+    warn:    ['ground','overhead'],
+    no:      [],
+    combos: {
+      ground: '바닥 수평 — 플로어 트래킹 느낌 (특수)',
+      eye:    '표준 아이레벨 — 가장 자연스러운 기본 구도',
+      chest:  '흉부 높이 수평 — 안정적이고 균형 잡힌 구도',
+    }
+  },
+  {
+    id:'tilt_down', label:'하향', type:'angle', sub:'렌즈가 아래를 향함', em:'⬇️',
+    prompt:'camera tilted down, lens angled downward, looking down at subject',
+    kr:'하향 틸트 — 렌즈가 아래를 향해 피사체를 내려다봄',
+    natural: ['gentle_high','mid_high','elevated','overhead','head'],
+    warn:    ['ground','ankle'],
+    no:      [],
+    combos: {
+      gentle_high: '약간 높은 위치에서 내려다보기 — 자연스러운 하이앵글',
+      mid_high:    '2층 높이에서 내려다보기 — 관찰자 시점',
+      elevated:    '고공에서 내려다보기 — 압도적 부감',
+      overhead:    "bird's eye view — 수직 하강 시점",
+      head:        '머리 위에서 살짝 내려다보기 — 미묘한 부감',
+    }
+  },
+];
+
+// 포커스 슬롯
+const FOCUS = [
+  { id:'face',  label:'얼굴',  sub:'Face',  em:'😶', type:'emphasis',
+    prompt:'with emphasis on the face, face as primary subject',
+    kr:'얼굴 강조, 얼굴이 주 피사체',
+    softDir: null, softHeight: null,
+    chips: [
+      {en:'sharp focus on eyes, shallow depth of field',   kr:'눈에 선명한 포커스, 얕은 심도'},
+      {en:'bokeh background, cinematic lens blur',         kr:'배경 보케, 시네마틱 렌즈 블러'},
+      {en:'facial expression emphasis',                    kr:'표정 강조'},
+    ]
+  },
+  { id:'body',  label:'몸체',  sub:'Body',  em:'🧍', type:'emphasis',
+    prompt:'with emphasis on the full figure, body as primary subject',
+    kr:'전신 강조, 몸체가 주 피사체',
+    softDir: null, softHeight: null,
+    chips: [
+      {en:'silhouette emphasis, body outline',             kr:'실루엣 강조, 신체 윤곽선'},
+      {en:'shallow depth of field, background separation', kr:'얕은 심도, 배경 분리'},
+    ]
+  },
+  { id:'hands', label:'손',    sub:'Hands', em:'🖐', type:'emphasis',
+    prompt:'with emphasis on the hands, hands as focal subject',
+    kr:'손 강조, 손이 주 피사체',
+    softDir: 'side', softHeight: null,
+    chips: [
+      {en:'selective focus on hands',                      kr:'손에 선택적 포커스'},
+      {en:'hands in foreground, blurred background',       kr:'손이 전경, 배경 흐림'},
+      {en:'reaching toward camera',                        kr:'카메라를 향해 뻗은 손'},
+    ]
+  },
+  { id:'feet',  label:'발',    sub:'Feet',  em:'🦶', type:'emphasis',
+    prompt:'with emphasis on the feet, feet as focal subject',
+    kr:'발 강조, 발이 주 피사체',
+    softDir: 'diagonal', softHeight: 'low',
+    chips: [
+      {en:"worm's-eye view, camera looking up at subject",          kr:'웜즈아이 뷰 — 바닥 위치 + 상향 시선 통합'},
+      {en:'lens angled upward, tilted up toward subject',           kr:'렌즈 위를 향해 틸트 (방향 명시)'},
+      {en:'foreshortening perspective, feet toward camera',         kr:'원근 왜곡, 발이 카메라 쪽으로'},
+      {en:'foot extended toward camera',                            kr:'카메라를 향해 뻗은 발'},
+      {en:'foreground emphasis, feet in frame',                     kr:'전경 강조, 발이 프레임 안에'},
+      {en:'selective focus on feet, blurred upper body',            kr:'발에 선택적 포커스, 상체 흐림'},
+    ]
+  },
+];
+
+// 포커스 플레인 (선명한 곳이 어느 거리인가)
+const FOCUS_PLANE = [
+  {
+    id:'fg_sharp', label:'전경 선명', sub:'Foreground Sharp', em:'🔍',
+    prompt:'foreground subject in sharp focus, background softly blurred',
+    kr:'전경 피사체 선명, 배경 흐림',
+    // 어울리는 Focus Point
+    fitFocus: ['feet','hands','body'],
+    chips: [
+      {en:'foreground subject sharp, background bokeh',         kr:'전경 선명, 배경 보케'},
+      {en:'subject in foreground in focus, depth falloff',      kr:'전경 피사체 포커스, 뒤로 갈수록 흐림'},
+      {en:'near subject sharp, far elements blurred',           kr:'가까운 피사체 선명, 먼 요소 흐림'},
+    ]
+  },
+  {
+    id:'mid_sharp', label:'중경 선명', sub:'Midground Sharp', em:'🎯',
+    prompt:'midground subject in sharp focus, foreground and background blurred',
+    kr:'중경 피사체 선명, 전·배경 흐림',
+    fitFocus: ['face','body'],
+    chips: [
+      {en:'sharp focus on midground subject',                   kr:'중경 피사체에 선명한 포커스'},
+      {en:'foreground element blurred, subject sharp',          kr:'전경 요소 흐림, 피사체 선명'},
+      {en:'near foreground bokeh, face in focus',               kr:'근거리 전경 보케, 얼굴에 포커스'},
+    ]
+  },
+  {
+    id:'bg_sharp', label:'배경 선명', sub:'Background Sharp', em:'🌅',
+    prompt:'background in sharp focus, subject slightly soft',
+    kr:'배경 선명, 피사체 약간 흐림',
+    fitFocus: ['body'],
+    chips: [
+      {en:'sharp background, subject in soft focus',            kr:'배경 선명, 피사체 소프트 포커스'},
+      {en:'environmental context emphasized',                   kr:'환경 맥락 강조'},
+      {en:'subject silhouetted against sharp background',       kr:'선명한 배경 앞 실루엣'},
+    ]
+  },
+  {
+    id:'split', label:'분할 포커스', sub:'Split Focus', em:'✂️',
+    prompt:'split focus, near element out of focus, subject sharp',
+    kr:'분할 포커스, 전경 흐림·피사체 선명',
+    fitFocus: ['face','hands'],
+    chips: [
+      {en:'hand out of focus in foreground, face sharp',        kr:'전경 손 흐림, 얼굴 선명'},
+      {en:'extreme near foreground blur, midground sharp',      kr:'극근거리 전경 흐림, 중경 선명'},
+      {en:'reaching hand blurred, expression in focus',         kr:'뻗은 손 흐림, 표정에 포커스'},
+    ]
+  },
+];
+
+// 피사체 상태 (AI 자세 회귀 방지)
+const POSE_CONTEXT = [
+  {
+    id:'standing',  label:'서 있음',   sub:'Standing',  em:'🧍',
+    prompt:'standing upright, full figure standing',
+    kr:'직립 자세, 서 있는 전신',
+  },
+  {
+    id:'leaning',   label:'기대어 있음', sub:'Leaning', em:'🚪',
+    prompt:'leaning against wall, supported posture',
+    kr:'벽에 기댄 자세',
+  },
+  {
+    id:'lying',     label:'누워 있음',  sub:'Lying',     em:'🛋',
+    prompt:'lying down, reclined pose, horizontal figure',
+    kr:'누운 자세, 수평 자세',
+  },
+  {
+    id:'sitting',   label:'앉아 있음',  sub:'Sitting',   em:'🪑',
+    prompt:'seated pose, sitting position',
+    kr:'앉은 자세',
+  },
+  {
+    id:'reaching',  label:'뻗기',       sub:'Reaching',  em:'🤚',
+    prompt:'arm extended toward camera, reaching gesture',
+    kr:'카메라를 향해 팔을 뻗는 동작',
+  },
+  {
+    id:'dynamic',   label:'동작 중',    sub:'In Motion', em:'⚡',
+    prompt:'dynamic pose, mid-action, body in motion',
+    kr:'역동적 포즈, 동작 중인 자세',
+  },
+];
+
+// 렌즈 효과 (렌즈 없이 광학적 결과만)
+// ※ 같은 "왜곡"이라도 방향·쓰임이 다름 — 한글 설명으로 구분
+const LENS_EFFECT = [
+  {
+    id:'persp_dist',  label:'원근 왜곡',   sub:'전경 과장·배경 급격히 축소', em:'📐',
+    prompt:'perspective distortion, exaggerated foreground, receding background',
+    kr:'원근 왜곡 — 가까운 것 과장, 먼 것 급격히 작아짐',
+    usage:'로우앵글+발/손 강조 시',
+    chips:[
+      {en:'strong perspective distortion, foreground exaggerated',  kr:'강한 원근 왜곡, 전경 과장'},
+      {en:'wide-angle perspective distortion',                       kr:'광각 렌즈 특유의 원근 왜곡'},
+      {en:'elongated limbs toward camera',                           kr:'카메라 쪽 팔다리가 길게 늘어남'},
+    ]
+  },
+  {
+    id:'compression', label:'압축 원근',   sub:'배경이 피사체에 밀착되어 보임', em:'🔭',
+    prompt:'compressed perspective, telephoto compression, flattened depth',
+    kr:'압축 원근 — 망원 느낌, 배경이 피사체와 가깝게 납작해짐',
+    usage:'배경과 피사체를 한 화면에 납작하게',
+    chips:[
+      {en:'telephoto compression, flattened spatial depth',          kr:'망원 압축, 납작한 공간감'},
+      {en:'background and subject appear at similar distance',       kr:'배경과 피사체가 같은 거리처럼'},
+      {en:'compressed spatial relationship',                         kr:'압축된 공간 관계'},
+    ]
+  },
+  {
+    id:'wide_dist',   label:'광각 왜곡',   sub:'주변부 늘어남·가장자리 변형', em:'🌐',
+    prompt:'wide-angle distortion, barrel distortion, edges stretched',
+    kr:'광각 왜곡 — 화면 가장자리가 늘어나고 변형됨',
+    usage:'역동적·과장된 광각 느낌',
+    chips:[
+      {en:'barrel distortion, wide field of view',                   kr:'배럴 왜곡, 넓은 화각'},
+      {en:'immersive wide-angle feel, edges bent',                   kr:'몰입감 있는 광각, 가장자리 휨'},
+    ]
+  },
+  {
+    id:'depth_exag',  label:'깊이 과장',   sub:'전·배경 거리감 극대화', em:'🎚',
+    prompt:'exaggerated depth, dramatic foreground-background separation',
+    kr:'깊이 과장 — 전경과 배경의 거리감을 극적으로 강조',
+    usage:'레이어드 구도·공간감 극대화',
+    chips:[
+      {en:'dramatic depth exaggeration, layered planes',             kr:'극적인 깊이 과장, 레이어드 공간'},
+      {en:'foreground to background depth gradient',                 kr:'전경→배경 깊이 그라데이션'},
+      {en:'strong three-dimensional depth illusion',                 kr:'강한 3D 깊이감 환상'},
+    ]
+  },
+];
+
+// 프레이밍 밀도 / 여백
+// ※ 같은 full body라도 선택에 따라 완전히 다른 이미지
+// ※ 내부적으로 density(밀도) + position(배치) 분리 — UI는 동일
+const FRAMING_DENSITY = [
+  {
+    id:'tight_frame', label:'타이트',     sub:'피사체가 프레임 대부분 차지', em:'▣',
+    density:'tight', position:'center',
+    // 충돌: macro/ecu는 이미 타이트가 기본 → 중복, full body는 어색
+    distConflict: ['fullbody','envport','wide'],   // warn 대상
+    distIncompat: [],                              // no 대상
+    prompt:'tight framing, subject fills most of the frame',
+    kr:'타이트 프레이밍 — 피사체가 화면 대부분 차지',
+    chips:[
+      {en:'subject dominates the frame',                              kr:'피사체가 화면을 압도'},
+      {en:'compact composition, minimal surrounding space',           kr:'빈틈 없는 구도, 주변 공간 최소'},
+    ]
+  },
+  {
+    id:'loose_frame', label:'루즈',       sub:'피사체 주변 여유 공간', em:'□',
+    density:'loose', position:'center',
+    distConflict: ['macro','ecu'],   // macro+루즈는 어색
+    distIncompat: [],
+    prompt:'loose framing, breathing room around subject, subject centered with space',
+    kr:'루즈 프레이밍 — 피사체 주변에 여유 공간 확보',
+    chips:[
+      {en:'generous space surrounding subject',                       kr:'피사체 주변에 넉넉한 공간'},
+      {en:'environmental context visible around subject',             kr:'주변 환경이 함께 보임'},
+    ]
+  },
+  {
+    id:'neg_left',    label:'여백 좌측',  sub:'피사체 우측 · 왼쪽 공간', em:'◨',
+    density:'loose', position:'right',
+    // ※ 프롬프트는 "피사체 위치" 기준으로 서술 (AI 방향 혼동 방지)
+    distConflict: ['macro','ecu'],
+    distIncompat: [],
+    prompt:'subject on right side of frame, negative space on left, off-center right placement',
+    kr:'좌측 여백 — 피사체를 우측에 배치, 왼쪽 공간 강조',
+    chips:[
+      {en:'subject right-aligned, open space to the left',           kr:'피사체 우측 배치, 좌측 열린 공간'},
+      {en:'gaze or movement leads into left negative space',         kr:'시선·움직임이 왼쪽 여백으로'},
+    ]
+  },
+  {
+    id:'neg_right',   label:'여백 우측',  sub:'피사체 좌측 · 오른쪽 공간', em:'◧',
+    density:'loose', position:'left',
+    distConflict: ['macro','ecu'],
+    distIncompat: [],
+    prompt:'subject on left side of frame, negative space on right, off-center left placement',
+    kr:'우측 여백 — 피사체를 좌측에 배치, 오른쪽 공간 강조',
+    chips:[
+      {en:'subject left-aligned, open space to the right',           kr:'피사체 좌측 배치, 우측 열린 공간'},
+      {en:'leading space ahead in direction of gaze or movement',    kr:'시선·움직임 방향 앞으로 열린 공간'},
+    ]
+  },
+  {
+    id:'neg_top',     label:'여백 상단',  sub:'피사체 하단 · 위쪽 공간', em:'⬆',
+    density:'loose', position:'bottom',
+    distConflict: ['macro','ecu'],
+    distIncompat: [],
+    prompt:'subject anchored at bottom of frame, negative space above, open sky or space overhead',
+    kr:'상단 여백 — 피사체 하단 고정, 위쪽 하늘·공간 강조',
+    chips:[
+      {en:'subject at bottom, sky or empty space above',             kr:'하단 피사체, 위쪽 하늘/공간'},
+      {en:'grounded weight at bottom, airy space at top',            kr:'하단 무게감, 상단 가벼운 공간'},
+    ]
+  },
+  {
+    id:'off_center',  label:'오프센터',   sub:'중앙 회피 · 비대칭 긴장감', em:'⊙',
+    density:'balanced', position:'off',
+    distConflict: [],
+    distIncompat: [],
+    // 방향 없는 오프센터는 의도적으로 약하게 서술
+    prompt:'slightly off-center composition, asymmetric subject placement',
+    kr:'오프센터 — 약간 중앙에서 벗어난 비대칭 배치',
+    chips:[
+      {en:'subject deliberately off-center, subtle tension',         kr:'의도적 비대칭, 은근한 긴장감'},
+      {en:'rule of thirds placement, asymmetric balance',            kr:'삼분할 배치, 비대칭 균형'},
+    ]
+  },
+];
+
+// 카메라 안정성 / 움직임
+// ※ handheld가 두 개인 이유: 강도가 다름 — 라벨로 구분
+const CAM_STABILITY = [
+  {
+    id:'tripod',      label:'삼각대',      sub:'고정·완전 안정', em:'📷',
+    prompt:'tripod mounted, perfectly stable shot, static camera',
+    kr:'삼각대 고정 — 흔들림 없는 완전 안정 구도',
+  },
+  {
+    id:'handheld_s',  label:'핸드헬드',    sub:'약한 흔들림 (다큐·일상)', em:'🤳',
+    prompt:'handheld camera, subtle natural movement, slight drift',
+    kr:'핸드헬드 — 자연스러운 약한 흔들림 (다큐·일상 느낌)',
+  },
+  {
+    id:'handheld_u',  label:'핸드헬드+',   sub:'강한 흔들림 (긴박·불안)', em:'📳',
+    prompt:'unstable handheld, shaky camera, urgent tension',
+    kr:'핸드헬드+ — 강한 흔들림 (긴박감·불안감, 같은 핸드헬드지만 강도 다름)',
+  },
+  {
+    id:'stabilized',  label:'스태빌라이저', sub:'부드러운 글라이딩 무브', em:'🎬',
+    prompt:'gimbal stabilized, smooth cinematic movement, floating glide',
+    kr:'스태빌라이저 — 부드럽게 떠다니는 시네마틱 무브',
+  },
+  {
+    id:'motion_blur', label:'모션블러',    sub:'속도감·흐림 강조', em:'💨',
+    prompt:'motion blur, speed lines, dynamic movement captured',
+    kr:'모션블러 — 빠른 움직임과 속도감 강조',
+  },
+];
+
+// 시선 처리 (face 포커스 선택 시 자동 노출)
+const GAZE = [
+  {
+    id:'eye_contact', label:'아이컨택',    sub:'카메라를 직접 응시', em:'👀',
+    prompt:'direct eye contact with camera, engaging direct gaze',
+    kr:'아이컨택 — 카메라(=관찰자)를 직접 응시',
+  },
+  {
+    id:'avert',       label:'시선 회피',   sub:'다른 곳 바라봄 (찰나 포착)', em:'👁️',
+    prompt:'averting gaze, looking away from camera, candid unaware moment',
+    kr:'시선 회피 — 카메라를 인식 못한 자연스러운 찰나 (아이컨택과 반대)',
+  },
+  {
+    id:'distance',    label:'먼 곳 응시',  sub:'허공·수평선 바라보기', em:'🌅',
+    prompt:'staring into the distance, contemplative gaze, unfocused distant look',
+    kr:'먼 곳 응시 — 허공·수평선을 바라봄 (시선 회피보다 더 멀고 몽환적)',
+  },
+  {
+    id:'downward',    label:'하향 시선',   sub:'아래를 내려다봄', em:'⬇️',
+    prompt:'looking downward, downcast gaze, introspective mood',
+    kr:'하향 시선 — 아래를 내려다보는 내향적·차분한 시선',
+  },
+];
+// 거리 id → 그룹 id
+function distGroup(distId) {
+  for (const g of DIST_GROUPS) {
+    if (g.items.find(i=>i.id===distId)) return g.group;
+  }
+  return null;
+}
+
+// 높이 그룹 헬퍼
+function heightGroup(heightId) {
+  for (const g of HEIGHT_GROUPS) {
+    if (g.items.find(i=>i.id===heightId)) return g.group;
+  }
+  return null;
+}
+
+/* ── 제약 테이블 ─────────────────────────────────────
+   키: `${distId}_${dirId}_${heightGroup}`  ← 높이는 그룹 단위
+   개별 heightId가 필요한 경우 `${distId}_${dirId}_${heightId}` 우선
+   ok / warn / no  (없으면 ok)
+─────────────────────────────────────────────────── */
+const CONSTRAINTS = {
+
+  // ── macro (초근접 디테일) ─────────────────────────
+  // 하이 계열: overhead처럼 돼서 디테일 의미 없음
+  'macro_front_gentle_high':  'warn',
+  'macro_front_mid_high':     'no',
+  'macro_front_elevated':     'no',
+  'macro_front_overhead':     'no',
+  'macro_side_gentle_high':   'warn',
+  'macro_side_mid_high':      'no',
+  'macro_side_elevated':      'no',
+  'macro_side_overhead':      'no',
+  'macro_rear_gentle_high':   'warn',
+  'macro_rear_mid_high':      'no',
+  'macro_rear_elevated':      'no',
+  'macro_rear_overhead':      'no',
+  'macro_diagonal_gentle_high':'warn',
+  'macro_diagonal_mid_high':  'no',
+  'macro_diagonal_elevated':  'no',
+  'macro_diagonal_overhead':  'no',
+  // 후면 계열
+  'macro_rear_eye':           'warn',
+  'macro_rear_chest':         'warn',
+  'macro_rear_head':          'warn',
+  'macro_rear_ground':        'no',
+  'macro_rear_ankle':         'no',
+
+  // ── ecu ──────────────────────────────────────────
+  'ecu_front_gentle_high':    'warn',
+  'ecu_front_mid_high':       'no',
+  'ecu_front_elevated':       'no',
+  'ecu_front_overhead':       'no',
+  'ecu_side_gentle_high':     'warn',
+  'ecu_side_mid_high':        'no',
+  'ecu_rear_gentle_high':     'warn',
+  'ecu_rear_mid_high':        'no',
+  'ecu_rear_elevated':        'no',
+  'ecu_rear_overhead':        'no',
+  'ecu_rear_ground':          'no',
+  'ecu_rear_ankle':           'warn',
+  'ecu_diagonal_gentle_high': 'warn',
+  'ecu_diagonal_mid_high':    'no',
+
+  // ── tight ─────────────────────────────────────────
+  'tight_rear_mid_high':      'warn',
+  'tight_rear_elevated':      'warn',
+  'tight_rear_overhead':      'no',
+  'tight_rear_ground':        'warn',
+  'tight_rear_ankle':         'warn',
+
+  // ── headshot ~ bust ───────────────────────────────
+  'headshot_rear_ground':     'no',
+  'headshot_rear_ankle':      'warn',
+  'headshot_rear_knee':       'warn',
+  'headshot_rear_mid_high':   'warn',
+  'headshot_rear_elevated':   'no',
+  'headshot_rear_overhead':   'no',
+  'portrait_rear_ground':     'no',
+  'portrait_rear_ankle':      'warn',
+  'bust_rear_ground':         'no',
+  'bust_rear_ankle':          'warn',
+
+  // ── upperbody ~ medium ────────────────────────────
+  'upperbody_rear_ground':    'warn',
+  'upperbody_rear_ankle':     'warn',
+  'upperbody_side_elevated':  'warn',
+  'upperbody_side_overhead':  'no',
+  'waistup_rear_ground':      'warn',
+  'medium_rear_ground':       'warn',
+  'medium_side_elevated':     'warn',
+  'medium_side_overhead':     'no',
+
+  // ── fullbody ──────────────────────────────────────
+  'fullbody_rear_ground':     'warn',
+  // overhead는 fullbody에서 권장 (버드아이)
+  'fullbody_front_overhead':  'ok',
+  'fullbody_side_overhead':   'ok',
+  'fullbody_diagonal_overhead':'ok',
+
+  // ── envport ───────────────────────────────────────
+  'envport_rear_ground':      'warn',
+  'envport_front_ground':     'warn',
+  'envport_front_ankle':      'warn',
+
+  // ── wide ──────────────────────────────────────────
+  // 와이드는 overhead 포함 모두 ok
+};
+
+/* ── 권장 조합 ───────────────────────────────────────
+   키: `${distId}_${dirId}_${heightId}`
+   Very Close 3 × Close 3 × Medium 3 × Far 3
+   × 방향 4 × 높이 3 = 최대 144
+   실용적인 조합만 수록, 없으면 그룹 fallback
+─────────────────────────────────────────────────── */
+// ── Crop Anchor — 어느 쪽 기준으로 자를지 ────────────────────────────────────
+// "framed from head to knees" 같은 범위 정의와 함께 사용
+// "어디를 남기고 어디를 자르는가"의 기준점 명시
+const CROP_ANCHOR = [
+  {
+    id:'anchor_head',   label:'머리 기준',  sub:'상단 보장·하단 잘림 허용', em:'⬆',
+    prompt:'anchored at head, top of frame fixed, lower body may be cropped',
+    kr:'머리 기준 — 상단 고정, 하체는 잘릴 수 있음',
+    note:'상반신 샷에서 얼굴이 반드시 보여야 할 때',
+  },
+  {
+    id:'anchor_feet',   label:'발 기준',    sub:'하단 보장·상단 잘림 허용', em:'⬇',
+    prompt:'anchored at feet, bottom of frame fixed, head may be cropped',
+    kr:'발 기준 — 하단 고정, 머리는 잘릴 수 있음',
+    note:'발·신발 강조 샷, 상체는 부차적',
+  },
+  {
+    id:'anchor_waist',  label:'허리 기준',  sub:'허리 중심·상하 균등 자르기', em:'↔',
+    prompt:'anchored at waist, centered crop from torso midpoint',
+    kr:'허리 기준 — 허리를 중심으로 균등 자르기',
+    note:'허리 강조, 상하 대칭 구도',
+  },
+  {
+    id:'anchor_full',   label:'전신 보장',  sub:'잘림 없음·전신 프레임 내', em:'✦',
+    prompt:'full body remains within frame, no cropping at any edge',
+    kr:'전신 보장 — 어느 방향으로도 잘리지 않음',
+    note:'constraint: 전신이 반드시 화면 안에',
+  },
+  {
+    id:'anchor_face',   label:'얼굴 기준',  sub:'얼굴 중심·주변 자르기 허용', em:'😶',
+    prompt:'anchored at face, face centered in frame, peripheral areas may crop',
+    kr:'얼굴 기준 — 얼굴 중심 고정, 주변부 잘림 허용',
+    note:'포트레이트: 얼굴이 반드시 중심에',
+  },
+];
+
+// ── Vertical Placement — 피사체의 프레임 내 수직 위치 ─────────────────────────
+// FRAMING_DENSITY가 "밀도·여백 방향"이라면
+// VERTICAL_PLACEMENT는 "피사체가 프레임 어느 높이에 위치하는가"
+const VERTICAL_PLACEMENT = [
+  {
+    id:'vp_top',    label:'상단 배치',  sub:'피사체 상단 · 아래 공간',  em:'⬆',
+    prompt:'subject positioned in upper portion of frame, lower area open',
+    kr:'상단 배치 — 피사체가 프레임 위쪽, 아래 공간 여유',
+  },
+  {
+    id:'vp_center', label:'중앙 배치',  sub:'피사체 수직 중앙',          em:'⊙',
+    prompt:'subject vertically centered in frame',
+    kr:'중앙 배치 — 피사체가 프레임 수직 중앙',
+  },
+  {
+    id:'vp_bottom', label:'하단 배치',  sub:'피사체 하단 · 위 공간',     em:'⬇',
+    prompt:'subject anchored at bottom of frame, upper area open',
+    kr:'하단 배치 — 피사체가 프레임 아래쪽, 위 공간 여유',
+  },
+  {
+    id:'vp_thirds_top', label:'상단 삼분할', sub:'1/3 지점 · 역동적 상단', em:'⅓↑',
+    prompt:'subject placed at upper third of frame, rule of thirds vertical',
+    kr:'상단 삼분할 — 프레임 상단 1/3 지점 배치',
+  },
+  {
+    id:'vp_thirds_bot', label:'하단 삼분할', sub:'2/3 지점 · 안정적 하단', em:'⅓↓',
+    prompt:'subject placed at lower third of frame, grounded composition',
+    kr:'하단 삼분할 — 프레임 하단 1/3 지점 배치, 안정감',
+  },
+];
+
+const RECS = {
+
+  /* ── Very Close ───────────────────────────────── */
+  macro_front_eye:{
+    구도:[{en:'fill the frame tight crop',kr:'프레임을 꽉 채운 타이트 크롭'},{en:'centered symmetry framing',kr:'중앙 대칭 프레이밍'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'macro straight-on angle',kr:'매크로 정면 앵글'}],
+    위치:[{en:'camera near front torso level',kr:'앞쪽 몸통 높이 카메라'},{en:'directly in front of subject, close distance',kr:'피사체 정면 근접'}],
+    배치느낌:[{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'handheld close proximity',kr:'핸드헬드 근접 촬영'},{en:'camera almost touching subject',kr:'피사체에 거의 닿을 듯한 카메라'}],
+  },
+  macro_front_low:{
+    구도:[{en:'fill the frame tight crop',kr:'프레임을 꽉 채운 타이트 크롭'},{en:'low placement, heavy and grounded',kr:'낮은 배치, 무겁고 안정적인 느낌'}],
+    앵글:[{en:'extreme low angle',kr:'극단적 로우 앵글'},{en:'chin-up upward angle',kr:'턱 들어올린 상향 앵글'}],
+    위치:[{en:'camera at floor level facing up',kr:'바닥 카메라, 위를 향함'},{en:'from ankle level',kr:'발목 높이에서'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'camera resting on surface',kr:'바닥에 놓인 카메라'}],
+  },
+  macro_side_eye:{
+    구도:[{en:'fill the frame tight crop',kr:'프레임을 꽉 채운 타이트 크롭'},{en:'diagonal flow composition',kr:'대각선 흐름 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'lateral close angle',kr:'측면 근접 앵글'}],
+    위치:[{en:'camera beside shoulder, close side',kr:'어깨 옆 근접 측면'},{en:'intimate side placement',kr:'밀착 측면 배치'}],
+    배치느낌:[{en:'Intimate',kr:'친밀하고 가까운 느낌'},{en:'observer sitting next to subject',kr:'피사체 옆에 앉은 관찰자'}],
+  },
+  macro_side_low:{
+    구도:[{en:'fill the frame tight crop',kr:'프레임을 꽉 채운 타이트 크롭'},{en:'dynamic diagonal framing',kr:'역동적 대각선 프레이밍'}],
+    앵글:[{en:'extreme low angle',kr:'극단적 로우 앵글'},{en:'lateral low angle',kr:'측면 로우 앵글'}],
+    위치:[{en:'camera beside hip, low',kr:'골반 옆 낮은 위치'},{en:'from knee level, side',kr:'무릎 높이 측면'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'camera resting on surface',kr:'바닥에 놓인 카메라'}],
+  },
+  macro_rear_eye:{
+    구도:[{en:'fill the frame tight crop',kr:'프레임을 꽉 채운 타이트 크롭'},{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'over-the-back close angle',kr:'후방 근접 앵글'}],
+    위치:[{en:'from directly behind subject, close',kr:'바로 후방 근접'},{en:'over-the-back proximity',kr:'후방 근접 배치'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'camera concealed near subject',kr:'피사체 근처 숨겨진 카메라'}],
+  },
+  macro_diagonal_eye:{
+    구도:[{en:'fill the frame tight crop',kr:'프레임을 꽉 채운 타이트 크롭'},{en:'dynamic diagonal framing',kr:'역동적 대각선 프레이밍'}],
+    앵글:[{en:'dutch angle',kr:'더치 앵글'},{en:'diagonal oblique close view',kr:'대각 사선 근접 뷰'}],
+    위치:[{en:'angled from front corner, close',kr:'전면 코너 사선 근접'},{en:'front-side close placement',kr:'전면 측 근접 배치'}],
+    배치느낌:[{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'handheld slightly unstable',kr:'약간 불안정한 핸드헬드'}],
+  },
+
+  ecu_front_eye:{
+    구도:[{en:'fill the frame tight crop',kr:'프레임을 꽉 채운 타이트 크롭'},{en:'centered symmetry framing',kr:'중앙 대칭 프레이밍'},{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'extreme close-up straight-on',kr:'익스트림 클로즈업 정면'}],
+    위치:[{en:'camera near front torso level',kr:'앞쪽 몸통 높이 카메라'},{en:'camera facing subject at close distance',kr:'피사체를 향한 근접 카메라'}],
+    배치느낌:[{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'handheld close proximity',kr:'핸드헬드 근접 촬영'}],
+  },
+  ecu_front_low:{
+    구도:[{en:'fill the frame tight crop',kr:'프레임을 꽉 채운 타이트 크롭'},{en:'subject top-frame, lightness and ascent',kr:'상단 배치, 가벼움과 상승감'}],
+    앵글:[{en:'extreme low angle',kr:'극단적 로우 앵글'},{en:'chin-up upward angle',kr:'턱 들어올린 상향 앵글'},'worm\'s eye (close)'],
+    위치:[{en:'camera at floor level facing up',kr:'바닥 카메라, 위를 향함'},{en:'camera near heel level, tilting up',kr:'발뒤꿈치 높이, 위를 향해 틸트'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'camera resting on surface',kr:'바닥에 놓인 카메라'}],
+  },
+  ecu_side_eye:{
+    구도:[{en:'fill the frame tight crop',kr:'프레임을 꽉 채운 타이트 크롭'},{en:'S-curve composition',kr:'S자 곡선 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'lateral view angle',kr:'측면 뷰 앵글'}],
+    위치:[{en:'camera at cheek level, side proximity',kr:'뺨 높이 측면 근접'},{en:'camera beside shoulder, close side',kr:'어깨 옆 근접 측면'}],
+    배치느낌:[{en:'Intimate',kr:'친밀하고 가까운 느낌'},{en:'handheld intimate distance',kr:'친밀한 거리의 핸드헬드'}],
+  },
+  ecu_rear_eye:{
+    구도:[{en:'fill the frame tight crop',kr:'프레임을 꽉 채운 타이트 크롭'},{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'}],
+    위치:[{en:'from directly behind subject',kr:'피사체 바로 후방'},{en:'close rear tracking placement',kr:'후방 근접 추적 배치'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'camera tucked beside subject',kr:'피사체 옆에 숨겨진 카메라'}],
+  },
+  ecu_diagonal_eye:{
+    구도:[{en:'fill the frame tight crop',kr:'프레임을 꽉 채운 타이트 크롭'},{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'}],
+    앵글:[{en:'dutch angle',kr:'더치 앵글'},{en:'diagonal oblique view',kr:'대각 사선 뷰'}],
+    위치:[{en:'angled from front corner',kr:'전면 코너 사선'},{en:'camera offset from center axis',kr:'중심축에서 벗어난 카메라'}],
+    배치느낌:[{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'handheld subtle shake',kr:'미세하게 흔들리는 핸드헬드'}],
+  },
+
+  tight_front_eye:{
+    구도:[{en:'fill the frame tight crop',kr:'프레임을 꽉 채운 타이트 크롭'},{en:'centered symmetry framing',kr:'중앙 대칭 프레이밍'},{en:'rule of thirds, subject left',kr:'삼등분 구도, 피사체 좌측'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'soft high angle',kr:'부드러운 하이 앵글'}],
+    위치:[{en:'camera facing subject at close distance',kr:'피사체를 향한 근접 카메라'},{en:'slightly off-center front placement',kr:'약간 축 벗어난 정면 배치'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'}],
+  },
+  tight_front_high:{
+    구도:[{en:'centered symmetry framing',kr:'중앙 대칭 프레이밍'},{en:'subject top-center, grounded weight',kr:'상단 중앙, 안정적 무게감'}],
+    앵글:[{en:'soft high angle',kr:'부드러운 하이 앵글'},{en:'shoulder-level downward gaze',kr:'어깨 높이에서 내려다보기'}],
+    위치:[{en:'from shoulder level',kr:'어깨 높이에서'},{en:'from above head level',kr:'머리 위에서'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'observer at same level as subject',kr:'피사체와 같은 눈높이 관찰자'}],
+  },
+  tight_side_eye:{
+    구도:[{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'S-curve composition',kr:'S자 곡선 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'dutch angle',kr:'더치 앵글'}],
+    위치:[{en:'camera beside shoulder, close side',kr:'어깨 옆 근접 측면'},{en:'camera at cheek level, side proximity',kr:'뺨 높이 측면 근접'}],
+    배치느낌:[{en:'Intimate',kr:'친밀하고 가까운 느낌'},{en:'observer leaning beside subject',kr:'피사체 옆에 기댄 관찰자'}],
+  },
+  tight_diagonal_eye:{
+    구도:[{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'},{en:'diagonal flow composition',kr:'대각선 흐름 구도'}],
+    앵글:[{en:'dutch angle',kr:'더치 앵글'},{en:'diagonal oblique view',kr:'대각 사선 뷰'}],
+    위치:[{en:'front-side close placement',kr:'전면 측 근접 배치'},{en:'angled from front corner',kr:'전면 코너 사선'}],
+    배치느낌:[{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'handheld subtle shake',kr:'미세하게 흔들리는 핸드헬드'}],
+  },
+
+  /* ── Close ────────────────────────────────────── */
+  headshot_front_eye:{
+    구도:[{en:'centered symmetry framing',kr:'중앙 대칭 프레이밍'},{en:'rule of thirds, subject left',kr:'삼등분 구도, 피사체 좌측'},{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'middle angle, balanced view',kr:'중간 앵글, 균형 뷰'}],
+    위치:[{en:'camera facing subject at close distance',kr:'피사체를 향한 근접 카메라'},{en:'directly in front of subject',kr:'피사체 정면'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'}],
+  },
+  headshot_front_high:{
+    구도:[{en:'centered symmetry framing',kr:'중앙 대칭 프레이밍'},{en:'subject top-center, grounded weight',kr:'상단 중앙, 안정적 무게감'}],
+    앵글:[{en:'soft high angle',kr:'부드러운 하이 앵글'},{en:'shoulder-level downward gaze',kr:'어깨 높이에서 내려다보기'}],
+    위치:[{en:'from shoulder level',kr:'어깨 높이에서'},{en:'from above head level',kr:'머리 위에서'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'fixed camera placement',kr:'고정 카메라 배치'}],
+  },
+  headshot_front_low:{
+    구도:[{en:'subject top-frame, lightness and ascent',kr:'상단 배치, 가벼움과 상승감'},{en:'dynamic diagonal framing',kr:'역동적 대각선 프레이밍'}],
+    앵글:[{en:'low angle',kr:'로우 앵글'},{en:'extreme low angle',kr:'극단적 로우 앵글'}],
+    위치:[{en:'from chin level upward',kr:'턱 높이에서 위를 향해'},{en:'from neck level, low angle',kr:'목 높이 로우 앵글'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'camera pressed against surface',kr:'표면에 밀착된 카메라'}],
+  },
+  headshot_side_eye:{
+    구도:[{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'S-curve composition',kr:'S자 곡선 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'dutch angle',kr:'더치 앵글'}],
+    위치:[{en:'camera at cheek level, side proximity',kr:'뺨 높이 측면 근접'},{en:'camera beside shoulder, close side',kr:'어깨 옆 근접 측면'}],
+    배치느낌:[{en:'Intimate',kr:'친밀하고 가까운 느낌'},{en:'observer leaning beside subject',kr:'피사체 옆에 기댄 관찰자'}],
+  },
+  headshot_rear_eye:{
+    구도:[{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'},{en:'rule of thirds, subject right',kr:'삼등분 구도, 피사체 우측'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'over-the-shoulder shot',kr:'오버더숄더 샷'}],
+    위치:[{en:'camera behind shoulder level',kr:'어깨 높이 후방'},{en:'over-the-back proximity',kr:'후방 근접 배치'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'camera as passive observer',kr:'수동적 관찰자 카메라'}],
+  },
+  headshot_diagonal_eye:{
+    구도:[{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'}],
+    앵글:[{en:'dutch angle',kr:'더치 앵글'},{en:'eye level shot',kr:'아이레벨 샷'}],
+    위치:[{en:'angled from front corner',kr:'전면 코너 사선'},{en:'front-side close placement',kr:'전면 측 근접 배치'}],
+    배치느낌:[{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'handheld eye-level drift',kr:'아이레벨 약한 핸드헬드 드리프트'}],
+  },
+
+  portrait_front_eye:{
+    구도:[{en:'centered symmetry framing',kr:'중앙 대칭 프레이밍'},{en:'golden ratio composition',kr:'황금비 구도'},{en:'rule of thirds, subject left',kr:'삼등분 구도, 피사체 좌측'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'soft high angle',kr:'부드러운 하이 앵글'},{en:'middle angle, balanced view',kr:'중간 앵글, 균형 뷰'}],
+    위치:[{en:'camera near front torso level',kr:'앞쪽 몸통 높이 카메라'},{en:'directly in front of subject',kr:'피사체 정면'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'잡지 화보처럼 세련된 연출',kr:'잡지 화보처럼 세련된 연출'}],
+  },
+  portrait_front_high:{
+    구도:[{en:'centered symmetry framing',kr:'중앙 대칭 프레이밍'},{en:'subject bottom-center, grounded weight',kr:'하단 중앙, 안정적 무게감'}],
+    앵글:[{en:'soft high angle',kr:'부드러운 하이 앵글'},{en:'shoulder-level downward gaze',kr:'어깨 높이에서 내려다보기'}],
+    위치:[{en:'from shoulder level',kr:'어깨 높이에서'},{en:'from chest level, slightly elevated',kr:'가슴 높이, 약간 높게'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'static mounted camera',kr:'고정 마운트 카메라'}],
+  },
+  portrait_front_low:{
+    구도:[{en:'subject top-frame, lightness and ascent',kr:'상단 배치, 가벼움과 상승감'},{en:'dynamic triangles composition',kr:'역동적 삼각형 구도'}],
+    앵글:[{en:'low angle',kr:'로우 앵글'},{en:'extreme low angle',kr:'극단적 로우 앵글'}],
+    위치:[{en:'from waist level, tilting up',kr:'허리 높이, 위를 향해 틸트'},{en:'from hip level front',kr:'골반 높이 정면'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'tripod low placement',kr:'낮은 삼각대 배치'}],
+  },
+  portrait_side_eye:{
+    구도:[{en:'S-curve composition',kr:'S자 곡선 구도'},{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'leading line flow',kr:'유도선 흐름 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'dutch angle',kr:'더치 앵글'}],
+    위치:[{en:'camera beside shoulder, close side',kr:'어깨 옆 근접 측면'},{en:'camera at cheek level, side proximity',kr:'뺨 높이 측면 근접'}],
+    배치느낌:[{en:'Intimate',kr:'친밀하고 가까운 느낌'},{en:'observer sharing space with subject',kr:'피사체와 공간 공유 관찰자'}],
+  },
+  portrait_side_high:{
+    구도:[{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'layered depth composition',kr:'레이어드 깊이감 구도'}],
+    앵글:[{en:'soft high angle',kr:'부드러운 하이 앵글'},{en:'shoulder-level downward gaze',kr:'어깨 높이에서 내려다보기'}],
+    위치:[{en:'from above head level, side',kr:'머리 위 측면'},{en:'from shoulder level',kr:'어깨 높이에서'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'surveillance-style fixed angle',kr:'감시 카메라 스타일 고정 앵글'}],
+  },
+  portrait_rear_eye:{
+    구도:[{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'},{en:'leading line flow',kr:'유도선 흐름 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'over-the-shoulder shot',kr:'오버더숄더 샷'}],
+    위치:[{en:'camera behind shoulder level',kr:'어깨 높이 후방'},{en:'over-the-back proximity',kr:'후방 근접 배치'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'camera as companion viewpoint',kr:'동행자 시점 카메라'}],
+  },
+  portrait_diagonal_eye:{
+    구도:[{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'dynamic triangles composition',kr:'역동적 삼각형 구도'},{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'}],
+    앵글:[{en:'dutch angle',kr:'더치 앵글'},{en:'eye level shot',kr:'아이레벨 샷'},{en:'diagonal oblique view',kr:'대각 사선 뷰'}],
+    위치:[{en:'{shoulder-high|over-the-shoulder} diagonal',kr:'{어깨 높이|오버더숄더} 사선'},{en:'angled from front corner',kr:'전면 코너 사선'}],
+    배치느낌:[{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'handheld eye-level drift',kr:'아이레벨 약한 핸드헬드 드리프트'}],
+  },
+  portrait_diagonal_high:{
+    구도:[{en:'layered depth composition',kr:'레이어드 깊이감 구도'},{en:'diagonal flow composition',kr:'대각선 흐름 구도'}],
+    앵글:[{en:'soft high angle',kr:'부드러운 하이 앵글'},{en:'shoulder-level downward gaze',kr:'어깨 높이에서 내려다보기'}],
+    위치:[{en:'from above head level, angled',kr:'머리 위 사선'},{en:'from shoulder level, diagonal',kr:'어깨 높이 사선'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'}],
+  },
+
+  bust_front_eye:{
+    구도:[{en:'centered symmetry framing',kr:'중앙 대칭 프레이밍'},{en:'rule of thirds, subject left',kr:'삼등분 구도, 피사체 좌측'},{en:'golden ratio composition',kr:'황금비 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'middle angle, balanced view',kr:'중간 앵글, 균형 뷰'}],
+    위치:[{en:'camera near front torso level',kr:'앞쪽 몸통 높이 카메라'},{en:'from chest level',kr:'가슴 높이에서'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'}],
+  },
+  bust_front_high:{
+    구도:[{en:'centered symmetry framing',kr:'중앙 대칭 프레이밍'},{en:'subject bottom-center, grounded weight',kr:'하단 중앙, 안정적 무게감'}],
+    앵글:[{en:'soft high angle',kr:'부드러운 하이 앵글'},{en:'shoulder-level downward gaze',kr:'어깨 높이에서 내려다보기'}],
+    위치:[{en:'from shoulder level',kr:'어깨 높이에서'},{en:'from chest level, slightly elevated',kr:'가슴 높이, 약간 높게'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'observer at same level as subject',kr:'피사체와 같은 눈높이 관찰자'}],
+  },
+  bust_front_low:{
+    구도:[{en:'subject top-frame, lightness and ascent',kr:'상단 배치, 가벼움과 상승감'},{en:'dynamic diagonal framing',kr:'역동적 대각선 프레이밍'}],
+    앵글:[{en:'low angle',kr:'로우 앵글'},{en:'extreme low angle',kr:'극단적 로우 앵글'}],
+    위치:[{en:'from waist level, tilting up',kr:'허리 높이, 위를 향해 틸트'},{en:'from hip level front',kr:'골반 높이 정면'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'camera resting on surface',kr:'바닥에 놓인 카메라'}],
+  },
+  bust_side_eye:{
+    구도:[{en:'S-curve composition',kr:'S자 곡선 구도'},{en:'diagonal flow composition',kr:'대각선 흐름 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'dutch angle',kr:'더치 앵글'}],
+    위치:[{en:'camera beside shoulder, close side',kr:'어깨 옆 근접 측면'},{en:'camera at cheek level, side proximity',kr:'뺨 높이 측면 근접'}],
+    배치느낌:[{en:'Intimate',kr:'친밀하고 가까운 느낌'},{en:'observer leaning beside subject',kr:'피사체 옆에 기댄 관찰자'}],
+  },
+  bust_rear_eye:{
+    구도:[{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'},{en:'leading line flow',kr:'유도선 흐름 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'over-the-shoulder shot',kr:'오버더숄더 샷'}],
+    위치:[{en:'camera behind shoulder level',kr:'어깨 높이 후방'},{en:'over-the-back proximity',kr:'후방 근접 배치'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'camera as companion viewpoint',kr:'동행자 시점 카메라'}],
+  },
+  bust_diagonal_eye:{
+    구도:[{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'}],
+    앵글:[{en:'dutch angle',kr:'더치 앵글'},{en:'eye level shot',kr:'아이레벨 샷'}],
+    위치:[{en:'angled from front corner',kr:'전면 코너 사선'},{en:'front-side close placement',kr:'전면 측 근접 배치'}],
+    배치느낌:[{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'handheld subtle shake',kr:'미세하게 흔들리는 핸드헬드'}],
+  },
+
+  /* ── Medium ───────────────────────────────────── */
+  upperbody_front_eye:{
+    구도:[{en:'rule of thirds, subject left',kr:'삼등분 구도, 피사체 좌측'},{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'S-curve composition',kr:'S자 곡선 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'middle angle, balanced view',kr:'중간 앵글, 균형 뷰'}],
+    위치:[{en:'hip-level positioning',kr:'골반 높이 포지셔닝'},{en:'from waist level',kr:'허리 높이에서'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'natural handheld framing',kr:'자연스러운 핸드헬드'}],
+  },
+  upperbody_front_high:{
+    구도:[{en:'subject bottom-center, grounded weight',kr:'하단 중앙, 안정적 무게감'},{en:'symmetrical composition',kr:'대칭 구도'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},{en:'soft high angle',kr:'부드러운 하이 앵글'}],
+    위치:[{en:'from shoulder level',kr:'어깨 높이에서'},{en:'from above head level',kr:'머리 위에서'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'fixed camera placement',kr:'고정 카메라 배치'}],
+  },
+  upperbody_front_low:{
+    구도:[{en:'subject top-frame, lightness and ascent',kr:'상단 배치, 가벼움과 상승감'},{en:'dynamic triangles composition',kr:'역동적 삼각형 구도'}],
+    앵글:[{en:'low angle',kr:'로우 앵글'},{en:'extreme low angle',kr:'극단적 로우 앵글'},'worm\'s eye view'],
+    위치:[{en:'from thigh level',kr:'허벅지 높이에서'},{en:'from knee level front',kr:'무릎 높이 정면'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'tripod low placement',kr:'낮은 삼각대 배치'}],
+  },
+  upperbody_side_eye:{
+    구도:[{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'S-curve composition',kr:'S자 곡선 구도'},{en:'leading line flow',kr:'유도선 흐름 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'dutch angle',kr:'더치 앵글'}],
+    위치:[{en:'waist-high side observation',kr:'허리 높이 측면 관찰'},{en:'camera beside hip',kr:'골반 옆'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'camera as passive observer',kr:'수동적 관찰자 카메라'}],
+  },
+  upperbody_rear_eye:{
+    구도:[{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'},{en:'leading lines converging to subject',kr:'피사체로 모이는 유도선'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'over-the-shoulder shot',kr:'오버더숄더 샷'}],
+    위치:[{en:'over-the-shoulder placement',kr:'오버더숄더 배치'},{en:'third-person viewpoint from behind',kr:'후방 3인칭 시점'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'camera as companion viewpoint',kr:'동행자 시점 카메라'}],
+  },
+  upperbody_diagonal_eye:{
+    구도:[{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'dynamic triangles composition',kr:'역동적 삼각형 구도'}],
+    앵글:[{en:'dutch angle',kr:'더치 앵글'},{en:'eye level shot',kr:'아이레벨 샷'}],
+    위치:[{en:'{shoulder-high|over-the-shoulder} diagonal',kr:'{어깨 높이|오버더숄더} 사선'},{en:'angled from front corner',kr:'전면 코너 사선'}],
+    배치느낌:[{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'handheld eye-level drift',kr:'아이레벨 약한 핸드헬드 드리프트'}],
+  },
+  upperbody_diagonal_high:{
+    구도:[{en:'layered depth composition',kr:'레이어드 깊이감 구도'},{en:'diagonal flow composition',kr:'대각선 흐름 구도'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},{en:'soft high angle',kr:'부드러운 하이 앵글'}],
+    위치:[{en:'corner of room, wide observation angle',kr:'방 모서리, 넓은 관찰 앵글'},{en:'from diagonal front position',kr:'대각 전면 위치에서'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'surveillance-style fixed angle',kr:'감시 카메라 스타일 고정 앵글'}],
+  },
+
+  waistup_front_eye:{
+    구도:[{en:'symmetrical composition',kr:'대칭 구도'},{en:'rule of thirds, subject left',kr:'삼등분 구도, 피사체 좌측'},{en:'S-curve composition',kr:'S자 곡선 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'middle angle, balanced view',kr:'중간 앵글, 균형 뷰'},{en:'over-the-shoulder shot',kr:'오버더숄더 샷'}],
+    위치:[{en:'hip-level positioning',kr:'골반 높이 포지셔닝'},{en:'camera at subject eye level, close front',kr:'피사체 눈높이, 근접 정면'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'observer sharing space with subject',kr:'피사체와 공간 공유 관찰자'}],
+  },
+  waistup_front_high:{
+    구도:[{en:'subject bottom-center, grounded weight',kr:'하단 중앙, 안정적 무게감'},{en:'symmetrical composition',kr:'대칭 구도'},{en:'deep perspective shot',kr:'원근감 강조 구도'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},{en:'soft high angle',kr:'부드러운 하이 앵글'},{en:'shoulder-level downward gaze',kr:'어깨 높이에서 내려다보기'}],
+    위치:[{en:'from shoulder level',kr:'어깨 높이에서'},{en:'from above head level',kr:'머리 위에서'},{en:'from chest level',kr:'가슴 높이에서'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'fixed camera placement',kr:'고정 카메라 배치'}],
+  },
+  waistup_front_low:{
+    구도:[{en:'subject top-frame, lightness and ascent',kr:'상단 배치, 가벼움과 상승감'},{en:'dynamic triangles composition',kr:'역동적 삼각형 구도'}],
+    앵글:[{en:'low angle',kr:'로우 앵글'},{en:'extreme low angle',kr:'극단적 로우 앵글'},'worm\'s eye view'],
+    위치:[{en:'from thigh level',kr:'허벅지 높이에서'},{en:'from knee level',kr:'무릎 높이에서'},{en:'from ankle level',kr:'발목 높이에서'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'tripod low placement',kr:'낮은 삼각대 배치'}],
+  },
+  waistup_side_eye:{
+    구도:[{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'S-curve composition',kr:'S자 곡선 구도'},{en:'leading line flow',kr:'유도선 흐름 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'lateral view angle',kr:'측면 뷰 앵글'},{en:'dutch angle',kr:'더치 앵글'}],
+    위치:[{en:'waist-high side observation',kr:'허리 높이 측면 관찰'},{en:'camera beside hip',kr:'골반 옆'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'camera hidden in environment',kr:'환경 속에 숨겨진 카메라'}],
+  },
+  waistup_side_high:{
+    구도:[{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'layered depth composition',kr:'레이어드 깊이감 구도'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},{en:'soft high angle',kr:'부드러운 하이 앵글'}],
+    위치:[{en:'from above head level, side',kr:'머리 위 측면'},{en:'from shoulder level',kr:'어깨 높이에서'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'surveillance-style fixed angle',kr:'감시 카메라 스타일 고정 앵글'}],
+  },
+  waistup_rear_eye:{
+    구도:[{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'},{en:'leading line flow',kr:'유도선 흐름 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'over-the-shoulder shot',kr:'오버더숄더 샷'}],
+    위치:[{en:'over-the-shoulder placement',kr:'오버더숄더 배치'},{en:'third-person viewpoint from behind',kr:'후방 3인칭 시점'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'camera as companion viewpoint',kr:'동행자 시점 카메라'}],
+  },
+  waistup_rear_high:{
+    구도:[{en:'deep perspective shot',kr:'원근감 강조 구도'},{en:'diagonal flow composition',kr:'대각선 흐름 구도'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},'bird\'s eye view (partial)'],
+    위치:[{en:'camera behind shoulder level, elevated',kr:'어깨 높이 후방, 높은 위치'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'drone overhead feel (low)',kr:'드론 오버헤드 (낮은)'}],
+  },
+  waistup_diagonal_eye:{
+    구도:[{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'dynamic triangles composition',kr:'역동적 삼각형 구도'},{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'}],
+    앵글:[{en:'dutch angle',kr:'더치 앵글'},{en:'diagonal oblique view',kr:'대각 사선 뷰'},{en:'eye level shot',kr:'아이레벨 샷'}],
+    위치:[{en:'{shoulder-high|over-the-shoulder} diagonal',kr:'{어깨 높이|오버더숄더} 사선'},{en:'angled from front corner',kr:'전면 코너 사선'}],
+    배치느낌:[{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'handheld eye-level drift',kr:'아이레벨 약한 핸드헬드 드리프트'}],
+  },
+  waistup_diagonal_high:{
+    구도:[{en:'layered depth composition',kr:'레이어드 깊이감 구도'},{en:'deep perspective shot',kr:'원근감 강조 구도'},{en:'diagonal flow composition',kr:'대각선 흐름 구도'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},{en:'soft high angle',kr:'부드러운 하이 앵글'}],
+    위치:[{en:'corner of room, wide observation angle',kr:'방 모서리, 넓은 관찰 앵글'},{en:'from diagonal front position',kr:'대각 전면 위치에서'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'surveillance-style fixed angle',kr:'감시 카메라 스타일 고정 앵글'}],
+  },
+  waistup_diagonal_low:{
+    구도:[{en:'dynamic diagonal framing',kr:'역동적 대각선 프레이밍'},{en:'dynamic triangles composition',kr:'역동적 삼각형 구도'}],
+    앵글:[{en:'low angle',kr:'로우 앵글'},{en:'extreme low angle',kr:'극단적 로우 앵글'}],
+    위치:[{en:'low diagonal placement near legs',kr:'다리 근처 낮은 사선 배치'},{en:'from knee level front',kr:'무릎 높이 정면'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'camera resting on surface',kr:'바닥에 놓인 카메라'}],
+  },
+
+  medium_front_eye:{
+    구도:[{en:'symmetrical composition',kr:'대칭 구도'},{en:'rule of thirds, subject left',kr:'삼등분 구도, 피사체 좌측'},{en:'diagonal flow composition',kr:'대각선 흐름 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'middle angle, balanced view',kr:'중간 앵글, 균형 뷰'},{en:'over-the-shoulder shot',kr:'오버더숄더 샷'}],
+    위치:[{en:'hip-level positioning',kr:'골반 높이 포지셔닝'},'camera at subject eye level'],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'natural handheld framing',kr:'자연스러운 핸드헬드'}],
+  },
+  medium_front_high:{
+    구도:[{en:'subject bottom-center, grounded weight',kr:'하단 중앙, 안정적 무게감'},{en:'deep perspective shot',kr:'원근감 강조 구도'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},{en:'soft high angle',kr:'부드러운 하이 앵글'}],
+    위치:[{en:'from shoulder level',kr:'어깨 높이에서'},{en:'from chest level',kr:'가슴 높이에서'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'fixed camera placement',kr:'고정 카메라 배치'}],
+  },
+  medium_front_low:{
+    구도:[{en:'subject top-frame, lightness and ascent',kr:'상단 배치, 가벼움과 상승감'},{en:'dynamic triangles composition',kr:'역동적 삼각형 구도'}],
+    앵글:[{en:'low angle',kr:'로우 앵글'},{en:'extreme low angle',kr:'극단적 로우 앵글'}],
+    위치:[{en:'from thigh level',kr:'허벅지 높이에서'},{en:'from knee level',kr:'무릎 높이에서'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'tripod low placement',kr:'낮은 삼각대 배치'}],
+  },
+  medium_side_eye:{
+    구도:[{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'S-curve composition',kr:'S자 곡선 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'dutch angle',kr:'더치 앵글'}],
+    위치:[{en:'waist-high side observation',kr:'허리 높이 측면 관찰'},{en:'camera beside hip',kr:'골반 옆'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},'camera hidden behind obstacle, side view'],
+  },
+  medium_rear_eye:{
+    구도:[{en:'off-balance tension framing',kr:'불균형 긴장감 프레이밍'},{en:'leading line flow',kr:'유도선 흐름 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'over-the-shoulder shot',kr:'오버더숄더 샷'}],
+    위치:[{en:'over-the-shoulder placement',kr:'오버더숄더 배치'},{en:'third-person viewpoint from behind',kr:'후방 3인칭 시점'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'camera as companion viewpoint',kr:'동행자 시점 카메라'}],
+  },
+  medium_diagonal_eye:{
+    구도:[{en:'diagonal flow composition',kr:'대각선 흐름 구도'},{en:'dynamic triangles composition',kr:'역동적 삼각형 구도'}],
+    앵글:[{en:'dutch angle',kr:'더치 앵글'},{en:'eye level shot',kr:'아이레벨 샷'}],
+    위치:[{en:'{shoulder-high|over-the-shoulder} diagonal',kr:'{어깨 높이|오버더숄더} 사선'}],
+    배치느낌:[{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'handheld eye-level drift',kr:'아이레벨 약한 핸드헬드 드리프트'}],
+  },
+
+  /* ── Far ──────────────────────────────────────── */
+  fullbody_front_eye:{
+    구도:[{en:'symmetrical composition',kr:'대칭 구도'},{en:'vanishing point composition',kr:'소실점 구도'},{en:'rule of thirds, subject left',kr:'삼등분 구도, 피사체 좌측'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'middle angle, balanced view',kr:'중간 앵글, 균형 뷰'}],
+    위치:[{en:'camera aligned with subject axis',kr:'피사체 축과 정렬된 카메라'},{en:'directly in front of subject',kr:'피사체 정면'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'static mounted camera',kr:'고정 마운트 카메라'}],
+  },
+  fullbody_front_high:{
+    구도:[{en:'subject bottom-center, grounded weight',kr:'하단 중앙, 안정적 무게감'},{en:'deep perspective shot',kr:'원근감 강조 구도'},{en:'vanishing point composition',kr:'소실점 구도'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},'bird\'s eye view',{en:'drone overhead feel',kr:'드론 오버헤드 느낌'}],
+    위치:[{en:'ceiling-mounted downward view',kr:'천장 마운트 하향 뷰'},{en:'overhead room-wide placement',kr:'방 전체 오버헤드 배치'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'drone overhead feel',kr:'드론 오버헤드 느낌'},{en:'security camera perspective',kr:'보안 카메라 시점'}],
+  },
+  fullbody_front_low:{
+    구도:[{en:'subject top-frame, lightness and ascent',kr:'상단 배치, 가벼움과 상승감'},{en:'vanishing point composition (upward)',kr:'소실점 구도 (위를 향한)'}],
+    앵글:['worm\'s eye view',{en:'extreme low angle',kr:'극단적 로우 앵글'},{en:'ground-level angle',kr:'지면 레벨 앵글'}],
+    위치:[{en:'ground-level placement, front',kr:'지면 레벨 정면 배치'},{en:'camera at floor level facing up',kr:'바닥 카메라, 위를 향함'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'camera lying on ground',kr:'바닥에 누운 카메라'},{en:'tripod low placement',kr:'낮은 삼각대 배치'}],
+  },
+  fullbody_side_eye:{
+    구도:[{en:'leading lines converging to subject',kr:'피사체로 모이는 유도선'},{en:'S-curve composition',kr:'S자 곡선 구도'},{en:'foreground-midground-background separation',kr:'전경·중경·배경 분리 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'lateral view angle',kr:'측면 뷰 앵글'}],
+    위치:[{en:'waist-high side observation',kr:'허리 높이 측면 관찰'},{en:'corner of room, wide observation angle',kr:'방 모서리, 넓은 관찰 앵글'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'static mounted camera',kr:'고정 마운트 카메라'}],
+  },
+  fullbody_side_high:{
+    구도:[{en:'layered depth composition',kr:'레이어드 깊이감 구도'},{en:'diagonal perspective',kr:'대각 원근 구도'},{en:'fill-the-frame pattern composition',kr:'프레임 가득 패턴 구도'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},'bird\'s eye view'],
+    위치:[{en:'overhead room-wide placement',kr:'방 전체 오버헤드 배치'},{en:'from above head level, side',kr:'머리 위 측면'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'drone overhead feel',kr:'드론 오버헤드 느낌'}],
+  },
+  fullbody_side_low:{
+    구도:[{en:'dynamic diagonal framing',kr:'역동적 대각선 프레이밍'},{en:'vanishing point composition (upward)',kr:'소실점 구도 (위를 향한)'}],
+    앵글:['worm\'s eye view',{en:'extreme low angle',kr:'극단적 로우 앵글'}],
+    위치:[{en:'ground-level placement, front',kr:'지면 레벨 정면 배치'},{en:'camera at floor level facing up',kr:'바닥 카메라, 위를 향함'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'tripod low placement',kr:'낮은 삼각대 배치'}],
+  },
+  fullbody_rear_eye:{
+    구도:[{en:'deep perspective shot',kr:'원근감 강조 구도'},{en:'vanishing point composition',kr:'소실점 구도'},{en:'leading lines converging to subject',kr:'피사체로 모이는 유도선'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'over-the-shoulder shot',kr:'오버더숄더 샷'}],
+    위치:[{en:'over-the-shoulder placement',kr:'오버더숄더 배치'},{en:'third-person viewpoint from behind',kr:'후방 3인칭 시점'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'camera as companion viewpoint',kr:'동행자 시점 카메라'}],
+  },
+  fullbody_rear_high:{
+    구도:[{en:'deep perspective shot',kr:'원근감 강조 구도'},{en:'vanishing point composition',kr:'소실점 구도'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},'bird\'s eye view (partial rear)'],
+    위치:[{en:'overhead room-wide placement',kr:'방 전체 오버헤드 배치'},{en:'camera behind shoulder level, elevated',kr:'어깨 높이 후방, 높은 위치'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'drone overhead feel',kr:'드론 오버헤드 느낌'}],
+  },
+  fullbody_rear_low:{
+    구도:[{en:'vanishing point composition (upward)',kr:'소실점 구도 (위를 향한)'},{en:'dynamic diagonal framing',kr:'역동적 대각선 프레이밍'}],
+    앵글:['worm\'s eye view',{en:'extreme low angle',kr:'극단적 로우 앵글'}],
+    위치:[{en:'ground-level placement, rear',kr:'지면 레벨 후방 배치'},{en:'camera at floor level facing up',kr:'바닥 카메라, 위를 향함'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'camera lying on ground',kr:'바닥에 누운 카메라'}],
+  },
+  fullbody_diagonal_eye:{
+    구도:[{en:'diagonal perspective',kr:'대각 원근 구도'},{en:'leading lines converging to subject',kr:'피사체로 모이는 유도선'},{en:'foreground-midground-background separation',kr:'전경·중경·배경 분리 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'diagonal oblique view',kr:'대각 사선 뷰'}],
+    위치:[{en:'corner of room, wide observation angle',kr:'방 모서리, 넓은 관찰 앵글'},{en:'from diagonal front position',kr:'대각 전면 위치에서'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'camera as passive observer',kr:'수동적 관찰자 카메라'}],
+  },
+  fullbody_diagonal_high:{
+    구도:[{en:'deep perspective shot',kr:'원근감 강조 구도'},{en:'layered depth composition',kr:'레이어드 깊이감 구도'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},{en:'drone overhead feel',kr:'드론 오버헤드 느낌'},'bird\'s eye view'],
+    위치:[{en:'overhead room-wide placement',kr:'방 전체 오버헤드 배치'},{en:'ceiling-mounted downward view',kr:'천장 마운트 하향 뷰'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'surveillance-style fixed angle',kr:'감시 카메라 스타일 고정 앵글'}],
+  },
+  fullbody_diagonal_low:{
+    구도:[{en:'vanishing point composition (upward)',kr:'소실점 구도 (위를 향한)'},{en:'dynamic diagonal framing',kr:'역동적 대각선 프레이밍'}],
+    앵글:['worm\'s eye view',{en:'extreme low angle',kr:'극단적 로우 앵글'}],
+    위치:[{en:'ground-level placement, front',kr:'지면 레벨 정면 배치'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'camera lying on ground',kr:'바닥에 누운 카메라'}],
+  },
+
+  envport_front_eye:{
+    구도:[{en:'vanishing point composition',kr:'소실점 구도'},{en:'deep perspective shot',kr:'원근감 강조 구도'},{en:'rule of thirds, subject left',kr:'삼등분 구도, 피사체 좌측'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'middle angle, balanced view',kr:'중간 앵글, 균형 뷰'}],
+    위치:[{en:'camera aligned with subject axis',kr:'피사체 축과 정렬된 카메라'},{en:'directly in front of subject',kr:'피사체 정면'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'관찰자가 조용히 지켜보는 듯한 느낌',kr:'관찰자가 조용히 지켜보는 듯한 느낌'}],
+  },
+  envport_front_high:{
+    구도:[{en:'deep perspective shot',kr:'원근감 강조 구도'},'bird\'s eye composition',{en:'subject bottom-center, grounded weight',kr:'하단 중앙, 안정적 무게감'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},'bird\'s eye view',{en:'drone overhead feel',kr:'드론 오버헤드 느낌'}],
+    위치:[{en:'overhead room-wide placement',kr:'방 전체 오버헤드 배치'},{en:'ceiling-mounted downward view',kr:'천장 마운트 하향 뷰'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'drone overhead feel',kr:'드론 오버헤드 느낌'}],
+  },
+  envport_front_low:{
+    구도:[{en:'vanishing point composition (upward)',kr:'소실점 구도 (위를 향한)'},{en:'subject top-frame, lightness and ascent',kr:'상단 배치, 가벼움과 상승감'}],
+    앵글:['worm\'s eye view',{en:'extreme low angle',kr:'극단적 로우 앵글'}],
+    위치:[{en:'ground-level placement, front',kr:'지면 레벨 정면 배치'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'camera lying on ground',kr:'바닥에 누운 카메라'}],
+  },
+  envport_side_eye:{
+    구도:[{en:'foreground-midground-background separation',kr:'전경·중경·배경 분리 구도'},{en:'S-curve composition',kr:'S자 곡선 구도'},{en:'leading lines converging to subject',kr:'피사체로 모이는 유도선'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'lateral view angle',kr:'측면 뷰 앵글'}],
+    위치:[{en:'corner of room, wide observation angle',kr:'방 모서리, 넓은 관찰 앵글'},{en:'waist-high side observation',kr:'허리 높이 측면 관찰'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'camera as passive observer',kr:'수동적 관찰자 카메라'}],
+  },
+  envport_rear_eye:{
+    구도:[{en:'deep perspective shot',kr:'원근감 강조 구도'},{en:'vanishing point composition',kr:'소실점 구도'},{en:'leading lines converging to subject',kr:'피사체로 모이는 유도선'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'over-the-shoulder shot',kr:'오버더숄더 샷'}],
+    위치:[{en:'over-the-shoulder placement',kr:'오버더숄더 배치'},{en:'third-person viewpoint from behind',kr:'후방 3인칭 시점'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'웅장한 대서사시처럼 압도적인 스케일',kr:'웅장한 대서사시처럼 압도적인 스케일'}],
+  },
+  envport_diagonal_eye:{
+    구도:[{en:'diagonal perspective',kr:'대각 원근 구도'},{en:'foreground-midground-background separation',kr:'전경·중경·배경 분리 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'diagonal oblique view',kr:'대각 사선 뷰'}],
+    위치:[{en:'corner of room, wide observation angle',kr:'방 모서리, 넓은 관찰 앵글'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'camera as passive observer',kr:'수동적 관찰자 카메라'}],
+  },
+  envport_diagonal_high:{
+    구도:[{en:'deep perspective shot',kr:'원근감 강조 구도'},{en:'layered depth composition',kr:'레이어드 깊이감 구도'},{en:'fill-the-frame pattern composition',kr:'프레임 가득 패턴 구도'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},{en:'drone overhead feel',kr:'드론 오버헤드 느낌'}],
+    위치:[{en:'overhead room-wide placement',kr:'방 전체 오버헤드 배치'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'surveillance-style fixed angle',kr:'감시 카메라 스타일 고정 앵글'}],
+  },
+
+  wide_front_eye:{
+    구도:[{en:'vanishing point composition',kr:'소실점 구도'},{en:'deep perspective shot',kr:'원근감 강조 구도'},{en:'symmetrical composition',kr:'대칭 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'middle angle, balanced view',kr:'중간 앵글, 균형 뷰'}],
+    위치:[{en:'camera aligned with subject axis',kr:'피사체 축과 정렬된 카메라'},{en:'directly in front of subject',kr:'피사체 정면'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'웅장한 대서사시처럼 압도적인 스케일',kr:'웅장한 대서사시처럼 압도적인 스케일'}],
+  },
+  wide_front_high:{
+    구도:['bird\'s eye composition',{en:'deep perspective shot',kr:'원근감 강조 구도'},{en:'fill-the-frame pattern composition',kr:'프레임 가득 패턴 구도'}],
+    앵글:['bird\'s eye view',{en:'overhead vertical',kr:'수직 오버헤드'},{en:'drone overhead feel',kr:'드론 오버헤드 느낌'}],
+    위치:[{en:'overhead room-wide placement',kr:'방 전체 오버헤드 배치'},{en:'ceiling-mounted downward view',kr:'천장 마운트 하향 뷰'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'drone overhead feel',kr:'드론 오버헤드 느낌'},{en:'security camera perspective',kr:'보안 카메라 시점'}],
+  },
+  wide_front_low:{
+    구도:[{en:'vanishing point composition (upward)',kr:'소실점 구도 (위를 향한)'},{en:'deep perspective shot',kr:'원근감 강조 구도'}],
+    앵글:['worm\'s eye view',{en:'extreme low angle',kr:'극단적 로우 앵글'},{en:'ground-level angle',kr:'지면 레벨 앵글'}],
+    위치:[{en:'ground-level placement, front',kr:'지면 레벨 정면 배치'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'camera lying on ground',kr:'바닥에 누운 카메라'}],
+  },
+  wide_side_eye:{
+    구도:[{en:'foreground-midground-background separation',kr:'전경·중경·배경 분리 구도'},{en:'leading lines converging to subject',kr:'피사체로 모이는 유도선'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'lateral view angle',kr:'측면 뷰 앵글'}],
+    위치:[{en:'corner of room, wide observation angle',kr:'방 모서리, 넓은 관찰 앵글'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'static mounted camera',kr:'고정 마운트 카메라'}],
+  },
+  wide_side_high:{
+    구도:[{en:'layered depth composition',kr:'레이어드 깊이감 구도'},{en:'fill-the-frame pattern composition',kr:'프레임 가득 패턴 구도'},{en:'diagonal perspective',kr:'대각 원근 구도'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},'bird\'s eye view'],
+    위치:[{en:'overhead room-wide placement',kr:'방 전체 오버헤드 배치'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'drone overhead feel',kr:'드론 오버헤드 느낌'}],
+  },
+  wide_rear_eye:{
+    구도:[{en:'deep perspective shot',kr:'원근감 강조 구도'},{en:'vanishing point composition',kr:'소실점 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'}],
+    위치:[{en:'over-the-shoulder placement',kr:'오버더숄더 배치'},{en:'third-person viewpoint from behind',kr:'후방 3인칭 시점'}],
+    배치느낌:[{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'}],
+  },
+  wide_diagonal_eye:{
+    구도:[{en:'diagonal perspective',kr:'대각 원근 구도'},{en:'foreground-midground-background separation',kr:'전경·중경·배경 분리 구도'},{en:'deep perspective shot',kr:'원근감 강조 구도'}],
+    앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'diagonal oblique view',kr:'대각 사선 뷰'}],
+    위치:[{en:'corner of room, wide observation angle',kr:'방 모서리, 넓은 관찰 앵글'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'}],
+  },
+  wide_diagonal_high:{
+    구도:[{en:'deep perspective shot',kr:'원근감 강조 구도'},{en:'layered depth composition',kr:'레이어드 깊이감 구도'},{en:'fill-the-frame pattern composition',kr:'프레임 가득 패턴 구도'}],
+    앵글:[{en:'high angle shot',kr:'하이 앵글 샷'},{en:'drone overhead feel',kr:'드론 오버헤드 느낌'},'bird\'s eye view'],
+    위치:[{en:'overhead room-wide placement',kr:'방 전체 오버헤드 배치'}],
+    배치느낌:[{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'surveillance-style fixed angle',kr:'감시 카메라 스타일 고정 앵글'}],
+  },
+  wide_diagonal_low:{
+    구도:[{en:'vanishing point composition (upward)',kr:'소실점 구도 (위를 향한)'},{en:'dynamic diagonal framing',kr:'역동적 대각선 프레이밍'}],
+    앵글:['worm\'s eye view',{en:'extreme low angle',kr:'극단적 로우 앵글'}],
+    위치:[{en:'ground-level placement, front',kr:'지면 레벨 정면 배치'}],
+    배치느낌:[{en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'camera lying on ground',kr:'바닥에 누운 카메라'}],
+  },
+};
+
+// 거리 붕괴 방지 세트 고정 프롬프트
+const LOCK_SET_PROMPTS = [
+  'camera distance fixed relative to subject, no zooming out',
+  'foreground element very close to lens, slightly blurred',
+  'clear depth separation between foreground, subject, and background',
+];
+
+// Aspect Ratio
+const ASPECT_RATIO = [
+  {
+    id:'9_16', label:'9:16', sub:'전신 로우 앵글·세로', em:'📱',
+    ar:'9:16', prompt:'vertical composition, aspect ratio 9:16',
+    kr:'세로 구도, 9:16 비율',
+    // 어울리는 거리 그룹
+    fitDist: ['Far','Medium'],
+    reason: '카메라 멀리 안 빼고도 전신+로우 유지',
+    w:9, h:16,
+  },
+  {
+    id:'4_5', label:'4:5', sub:'인물 포트레이트', em:'🖼️',
+    ar:'4:5', prompt:'portrait composition, aspect ratio 4:5',
+    kr:'포트레이트 구도, 4:5 비율',
+    fitDist: ['Close','Medium'],
+    reason: '상반신 안정적 프레이밍',
+    w:4, h:5,
+  },
+  {
+    id:'1_1', label:'1:1', sub:'매크로·접사·정방형', em:'⬛',
+    ar:'1:1', prompt:'square composition, aspect ratio 1:1',
+    kr:'정방형 구도, 1:1 비율',
+    fitDist: ['Very Close'],
+    reason: '중앙 집중, 시선 분산 방지',
+    w:1, h:1,
+  },
+  {
+    id:'16_9', label:'16:9', sub:'파노라마·광각·하이앵글', em:'🎬',
+    ar:'16:9', prompt:'wide composition, aspect ratio 16:9',
+    kr:'와이드 구도, 16:9 비율',
+    fitDist: ['Far'],
+    reason: '수평 확장, 배경 강조',
+    w:16, h:9,
+  },
+  {
+    id:'21_9', label:'21:9', sub:'시네마스코프', em:'🎞️',
+    ar:'21:9', prompt:'cinematic widescreen, aspect ratio 21:9',
+    kr:'시네마틱 와이드스크린, 21:9 비율',
+    fitDist: ['Far'],
+    reason: '수평 최대 확장, 영화적',
+    w:21, h:9,
+  },
+];
+
+// 범용 배치 느낌
+const FEEL_UNIVERSAL = [
+  {en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'},{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'Voyeuristic',kr:'관음적·숨어서 지켜보는 느낌'},{en:'Intimate|Candid',kr:'친밀하고 자연스러운 느낌'},
+  {en:'embedded viewpoint',kr:'환경 속에 녹아든 시점'},{en:'handheld close proximity',kr:'핸드헬드 근접 촬영'},{en:'camera resting on surface',kr:'바닥에 놓인 카메라'},
+  {en:'natural handheld framing',kr:'자연스러운 핸드헬드'},{en:'fixed camera placement',kr:'고정 카메라 배치'},{en:'voyeuristic hidden angle',kr:'숨겨진 시선 앵글'},
+  {en:'handheld subtle shake',kr:'미세하게 흔들리는 핸드헬드'},{en:'observer sharing space with subject',kr:'피사체와 공간 공유 관찰자'},
+];
+
+/* ═══════════════════════════════════════════════════════
+   상태
+═══════════════════════════════════════════════════════ */
+// 2인 관계 구도
+const REL_COMPOSITION = [
+  {id:'side_by_side',  label:'Side by Side',  kr:'나란히',        em:'👫', prompt:'two subjects side by side, equal framing'},
+  {id:'ots',           label:'Over-the-Shoulder', kr:'어깨 너머',  em:'🤝', prompt:'over-the-shoulder shot, one subject in foreground back to camera, other facing camera'},
+  {id:'fg_bg',         label:'Fore/Background', kr:'전경·배경',   em:'🔭', prompt:'subject in foreground, second subject in background, depth separation'},
+  {id:'facing',        label:'Facing Each Other', kr:'마주보기',   em:'💬', prompt:'two subjects facing each other, profile shots'},
+];
+
+// 2인 초점 대상
+const FOCUS_SUBJECT = [
+  {id:'both',    label:'Both in Focus', kr:'둘 다 선명',    em:'⊙⊙', prompt:'both subjects in sharp focus'},
+  {id:'subj_a',  label:'Subject A',     kr:'A 선명',        em:'⊙○', prompt:'focus on foreground subject, second subject softly out of focus'},
+  {id:'subj_b',  label:'Subject B',     kr:'B 선명',        em:'○⊙', prompt:'focus on background subject, foreground subject softly blurred'},
+  {id:'scene',   label:'Scene Focus',   kr:'장면 우선',     em:'○○', prompt:'wide depth of field, scene-focused composition, both subjects visible'},
+];
+
+// 2인 시선 관계
+const GAZE_REL = [
+  {id:'eye_contact',    label:'Eye Contact',    kr:'서로 바라봄',  em:'👀', prompt:'subjects making eye contact with each other'},
+  {id:'both_cam',       label:'Both to Camera', kr:'둘 다 카메라', em:'📷', prompt:'both subjects looking directly at camera'},
+  {id:'one_cam',        label:'One to Camera',  kr:'한 명만 카메라',em:'👁', prompt:'one subject looking at camera, other looking away'},
+  {id:'both_away',      label:'Both Away',      kr:'둘 다 외면',   em:'↔', prompt:'both subjects looking away from camera, candid feel'},
+];
+
+// 3인+ 그룹 구도
+const GROUP_COMPOSITION = [
+  {id:'triangle',   label:'Triangle',     kr:'삼각 구도',   em:'△', prompt:'triangular group composition, dynamic arrangement'},
+  {id:'line',       label:'Line',         kr:'일렬',        em:'━', prompt:'subjects arranged in a line, even horizontal composition'},
+  {id:'cluster',    label:'Cluster',      kr:'클러스터',    em:'●', prompt:'clustered group, tight candid composition'},
+  {id:'scattered',  label:'Scattered',    kr:'분산',        em:'∴', prompt:'subjects at varying distances, layered depth composition'},
+];
+
+const S = { persons:1, relCompos:null, focusSubject:null, gazeRel:null, groupCompos:null,
+  dist:null, dir:null, height:null, tilt:null, focus:null, focusPlane:null, pose:null,
+  lensEffect:null, framingDensity:null, camStability:null, gaze:null,
+  cropAnchor:null, verticalPlacement:null,
+  lockSet:false, aspectRatio:null, picks:{} };
+
+function getDistItem(id) {
+  for(const g of DIST_GROUPS) { const it=g.items.find(i=>i.id===id); if(it) return it; }
+  return null;
+}
+function getDistGroupName(id) {
+  for(const g of DIST_GROUPS) { if(g.items.find(i=>i.id===id)) return g.group; }
+  return null;
+}
+function constraintSt(distId, dirId, heightId) {
+  // 1) 정확한 distId+dirId+heightId 키
+  const exact = `${distId}_${dirId}_${heightId}`;
+  if (CONSTRAINTS[exact]) return CONSTRAINTS[exact];
+  // 2) 높이 그룹 fallback
+  const hGrp = heightGroup(heightId);
+  if (hGrp) {
+    const grpKey = `${distId}_${dirId}_${hGrp}`;
+    if (CONSTRAINTS[grpKey]) return CONSTRAINTS[grpKey];
+  }
+  return 'ok';
+}
+function recKey() {
+  if(!S.dist||!S.dir||!S.height) return null;
+  return `${S.dist}_${S.dir}_${S.height}`;
+}
+// RECS fallback: 높이 id → 높이 그룹 구버전 id 매핑
+const HEIGHT_LEGACY = {
+  ground:'low', ankle:'low', knee:'low',
+  chest:'eye',  eye:'eye',   head:'eye',
+  gentle_high:'high', mid_high:'high', elevated:'high', overhead:'high',
+};
+// 없는 키는 높이 레거시 → 그룹 fallback
+function getRec() {
+  const k = recKey(); if(!k) return null;
+  if(RECS[k]) return RECS[k];
+  // 높이 레거시 fallback (eye/low/high 키로 된 RECS 검색)
+  const legacyH = HEIGHT_LEGACY[S.height];
+  if(legacyH) {
+    const lk = `${S.dist}_${S.dir}_${legacyH}`;
+    if(RECS[lk]) return RECS[lk];
+  }
+  // dist 그룹 fallback
+  const grp = getDistGroupName(S.dist);
+  const grpItems = DIST_GROUPS.find(g=>g.group===grp)?.items||[];
+  for(const it of grpItems) {
+    const legH = HEIGHT_LEGACY[S.height] || S.height;
+    const fk = `${it.id}_${S.dir}_${legH}`;
+    if(RECS[fk]) return RECS[fk];
+  }
+  return null;
+}
+
+/* ═══════════════════════════════════════════════════════
+   언어 설정
+═══════════════════════════════════════════════════════ */
+let LANG = 'en'; // 'en' | 'kr'
+
+function setLang(l) {
+  LANG = l;
+  document.getElementById('btnEN').classList.toggle('active', l==='en');
+  document.getElementById('btnKR').classList.toggle('active', l==='kr');
+  document.getElementById('langNote').style.display = l==='kr' ? 'block' : 'none';
+  // picks 초기화 없이 전체 재렌더 (선택 상태 유지)
+  update();
+}
+
+// 항목의 현재 언어 프롬프트 반환
+function p(item) {
+  return (LANG==='kr' && item.kr) ? item.kr : item.prompt;
+}
+// 칩 텍스트: RECS는 en/kr 쌍으로 저장
+// 칩은 {en:'...', kr:'...'} 객체 또는 문자열
+function chipTxt(item) {
+  if(typeof item === 'string') return item;
+  return (LANG==='kr' && item.kr) ? item.kr : item.en;
+}
+function chipVal(item) { return typeof item==='string' ? item : item.en; }
+
+/* ═══════════════════════════════════════════════════════
+   렌더링
+═══════════════════════════════════════════════════════ */
+function renderDist() {
+  const g = document.getElementById('distGrid');
+  g.innerHTML = DIST_GROUPS.map(grp=>`
+    <div class="dist-group">
+      <div class="dist-group-label" style="color:${grp.color}">${grp.label}</div>
+      <div class="dist-btns">
+        ${grp.items.map(it=>`
+          <div class="btn ${S.dist===it.id?'sel':''}" onclick="selectDist('${it.id}')">
+            <span class="la">${it.label}</span>
+            <span class="su">${it.sub}</span>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function renderDir() {
+  const g = document.getElementById('dirGrid');
+  if(!S.dist){g.innerHTML='';return;}
+  g.innerHTML = DIR.map(d=>{
+    const states = HEIGHT.map(h=>constraintSt(S.dist,d.id,h.id));
+    const allNo  = states.every(s=>s==='no');
+    const anyWarn= !allNo && states.some(s=>s==='warn') && !states.some(s=>s==='ok');
+    const cls = allNo?'disabled dir-btn':(S.dir===d.id?'sel dir-btn':'dir-btn');
+    const warn = allNo?'충돌':anyWarn?'주의':'';
+    const tagCls = allNo?'tag-no':'tag-warn';
+    return `<div class="btn ${cls}" onclick="selectDir('${d.id}')">
+      ${warn?`<span class="ctag ${tagCls}">${warn}</span>`:''}
+      <span class="em">${d.em}</span>
+      <span class="la">${d.label}</span>
+      <span class="su">${d.sub}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderHeight() {
+  const g = document.getElementById('heightGrid');
+  if(!S.dist||!S.dir){g.innerHTML='';return;}
+
+  // 그룹별로 나눠서 렌더링
+  g.innerHTML = HEIGHT_GROUPS.map(grp=>`
+    <div style="grid-column:1/-1;font-size:9px;font-weight:700;color:${grp.color};text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;margin-top:4px">${grp.label}</div>
+    ${grp.items.map(h=>{
+      const st = constraintSt(S.dist,S.dir,h.id);
+      const cls = st==='no'?'disabled ht-btn':(S.height===h.id?'sel ht-btn':(st==='warn'?'warn-state ht-btn':'ht-btn'));
+      const tagTxt = st==='no'?'충돌':st==='warn'?'주의':'';
+      const tagCls = st==='no'?'tag-no':'tag-warn';
+      return `<div class="btn ${cls}" onclick="selectHeight('${h.id}')">
+        ${tagTxt?`<span class="ctag ${tagCls}">${tagTxt}</span>`:''}
+        <span class="em">${h.em}</span>
+        <span class="la">${h.label}</span>
+        <span class="su">${h.sub}</span>
+      </div>`;
+    }).join('')}
+  `).join('');
+}
+
+function renderTilt() {
+  const g = document.getElementById('tiltGrid');
+  const hint = document.getElementById('tiltHint');
+  if(!g) return;
+  if(!S.height) { g.innerHTML=''; if(hint) hint.textContent=''; return; }
+
+  g.innerHTML = TILT.map(t=>{
+    const isNatural = t.natural.includes(S.height);
+    const isWarn    = t.warn.includes(S.height);
+    const isNo      = t.no.includes(S.height);
+    const cls = isNo ? 'disabled' : S.tilt===t.id ? 'sel' : isWarn ? 'warn-state' : '';
+    const tag = isNo
+      ? `<span class="ctag tag-no">불가</span>`
+      : isNatural
+        ? `<span class="ctag tag-ok">권장</span>`
+        : isWarn
+          ? `<span class="ctag tag-warn">주의</span>` : '';
+    return `<div class="btn ${cls}" onclick="${isNo?'':` selectTilt('${t.id}')`}">
+      ${tag}
+      <span class="em">${t.em}</span>
+      <span class="la">${t.label}</span>
+      <span class="su">${t.sub}</span>
+    </div>`;
+  }).join('');
+
+  // 선택된 틸트 + 현재 높이 조합 설명
+  if(hint && S.tilt && S.height) {
+    const t = TILT.find(x=>x.id===S.tilt);
+    const desc = t?.combos?.[S.height] || '';
+    hint.textContent = desc ? `💡 ${desc}` : '';
+  } else if(hint) { hint.textContent=''; }
+}
+function renderFocus() {
+  const g = document.getElementById('focusGrid');
+  const c = document.getElementById('focusChips');
+  if(!S.dist||!S.dir||!S.height){g.innerHTML='';c.innerHTML='';return;}
+
+  g.innerHTML = FOCUS.map(f=>{
+    const hasSoftDir = f.softDir && f.softDir !== S.dir;
+    const hasSoftHt  = f.softHeight && f.softHeight !== S.height;
+    const needsHint  = hasSoftDir || hasSoftHt;
+    const hintTxt = needsHint ? (f.id==='feet' ? '로우+대각 권장' : '') : '';
+    return `<div class="btn ${S.focus===f.id?'sel':''} ${needsHint?'warn-state':''}" onclick="selectFocus('${f.id}')">
+      ${hintTxt?`<span class="ctag tag-warn">${hintTxt}</span>`:''}
+      <span class="em">${f.em}</span>
+      <span class="la">${f.label}</span>
+      <span class="su">${f.sub}</span>
+    </div>`;
+  }).join('');
+
+  if(S.focus) {
+    const foc = FOCUS.find(f=>f.id===S.focus);
+    if(foc && foc.chips.length) {
+      const chips = foc.chips.map(it=>makeChip('focus_chip', it)).join('');
+      c.innerHTML = `<div class="rec-list">${chips}</div>`;
+    } else { c.innerHTML=''; }
+  } else { c.innerHTML=''; }
+
+  renderGaze();
+  renderPlane();
+  renderLens();
+  renderDensity();
+  renderCropAnchor();
+  renderVerticalPlacement();
+  renderStability();
+  renderPose();
+}
+
+function renderGaze() {
+  const g = document.getElementById('gazeGrid');
+  if(!g) return;
+  // face 포커스 시 강조, 아니면 연하게 표시
+  const isFace = S.focus === 'face';
+  g.innerHTML = GAZE.map(gz=>{
+    const cls = S.gaze===gz.id ? 'sel' : (!isFace ? 'warn-state' : '');
+    const tag = isFace ? `<span class="ctag tag-ok">권장</span>` : '';
+    return `<div class="btn ${cls}" onclick="selectSimple('gaze','${gz.id}',this)">
+      ${tag}
+      <span class="em">${gz.em}</span>
+      <span class="la">${gz.label}</span>
+      <span class="su">${gz.sub}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderLens() {
+  const g = document.getElementById('lensGrid');
+  const c = document.getElementById('lensChips');
+  if(!g) return;
+
+  // 높이 그룹 기반 렌즈 권장
+  const hGrp = heightGroup(S.height);
+  const isVeryLow = S.height === 'ground' || S.height === 'ankle';
+  const rec = isVeryLow ? 'persp_dist' : hGrp==='low' ? 'persp_dist' : hGrp==='high' ? 'compression' : null;
+
+  g.innerHTML = LENS_EFFECT.map(le=>{
+    const isRec = le.id === rec;
+    const cls = S.lensEffect===le.id ? 'sel' : '';
+    const tag = isRec ? `<span class="ctag tag-ok">${le.usage}</span>` : '';
+    return `<div class="btn ${cls}" onclick="selectLens('${le.id}')" title="${le.usage||''}">
+      ${tag}
+      <span class="em">${le.em}</span>
+      <span class="la">${le.label}</span>
+      <span class="su">${le.sub}</span>
+    </div>`;
+  }).join('');
+
+  if(S.lensEffect) {
+    const le = LENS_EFFECT.find(x=>x.id===S.lensEffect);
+    if(le && le.chips.length) {
+      c.innerHTML = `<div class="rec-list">${le.chips.map(it=>makeChip('lens_chip',it)).join('')}</div>`;
+    } else { c.innerHTML=''; }
+  } else { c.innerHTML=''; }
+}
+
+function renderDensity() {
+  const g = document.getElementById('densityGrid');
+  const c = document.getElementById('densityChips');
+  if(!g) return;
+
+  g.innerHTML = FRAMING_DENSITY.map(fd=>{
+    const cls = S.framingDensity===fd.id ? 'sel' : '';
+    const isConflict = S.dist && fd.distConflict && fd.distConflict.includes(S.dist);
+    const isIncompat = S.dist && fd.distIncompat && fd.distIncompat.includes(S.dist);
+    const warnCls = isIncompat ? 'disabled' : isConflict ? 'warn-state' : '';
+    const tag = isIncompat
+      ? `<span class="ctag tag-no">비권장</span>`
+      : isConflict
+        ? `<span class="ctag tag-warn">거리 충돌</span>`
+        : '';
+    return `<div class="btn ${cls} ${warnCls}" onclick="${isIncompat?'':` selectSimple('framingDensity','${fd.id}',this)`}">
+      ${tag}
+      <span class="em" style="font-size:13px;margin-bottom:3px;display:block">${fd.em}</span>
+      <span class="la">${fd.label}</span>
+      <span class="su">${fd.sub}</span>
+    </div>`;
+  }).join('');
+
+  if(S.framingDensity) {
+    const fd = FRAMING_DENSITY.find(x=>x.id===S.framingDensity);
+    if(fd && fd.chips && fd.chips.length) {
+      c.innerHTML = `<div class="rec-list">${fd.chips.map(it=>makeChip('density_chip',it)).join('')}</div>`;
+    } else { c.innerHTML=''; }
+  } else { c.innerHTML=''; }
+}
+
+function renderCropAnchor() {
+  const g = document.getElementById('cropAnchorGrid');
+  if(!g) return;
+  g.innerHTML = CROP_ANCHOR.map(ca=>{
+    const sel = S.cropAnchor === ca.id;
+    // anchor_full은 constraint type — full body 선택 시 자동 권장
+    const isRec = ca.id === 'anchor_full' && S.dist && ['fullbody','envport','wide'].includes(S.dist);
+    const border = isRec && !sel ? 'border-color:rgba(125,207,255,.5);' : '';
+    const tag = isRec && !sel ? `<span class="ctag tag-ok" style="font-size:7px">권장</span>` : '';
+    return `<div class="btn${sel?' sel':''}" style="${border}" onclick="selectSimple('cropAnchor','${ca.id}',this)"
+      title="${ca.note||''}">
+      ${tag}
+      <span class="em">${ca.em}</span>
+      <span class="la">${ca.label}</span>
+      <span class="su">${ca.sub}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderVerticalPlacement() {
+  const g = document.getElementById('verticalPlacementGrid');
+  if(!g) return;
+  g.innerHTML = VERTICAL_PLACEMENT.map(vp=>{
+    const sel = S.verticalPlacement === vp.id;
+    return `<div class="btn${sel?' sel':''}" onclick="selectSimple('verticalPlacement','${vp.id}',this)">
+      <span class="em">${vp.em}</span>
+      <span class="la">${vp.label}</span>
+      <span class="su">${vp.sub}</span>
+    </div>`;
+  }).join('');
+}
+
+
+function renderStability() {
+  const g = document.getElementById('stabilityGrid');
+  if(!g) return;
+  g.innerHTML = CAM_STABILITY.map(cs=>{
+    const cls = S.camStability===cs.id ? 'sel' : '';
+    return `<div class="btn ${cls}" onclick="selectSimple('camStability','${cs.id}',this)">
+      <span class="em">${cs.em}</span>
+      <span class="la">${cs.label}</span>
+      <span class="su">${cs.sub}</span>
+    </div>`;
+  }).join('');
+}
+
+// 공통 칩 생성
+// · 표시(txt): LANG에 따라 EN/KR
+// · 툴팁(title): 항상 EN 고정 (프롬프트 원문 확인용)
+function makeChip(cat, it) {
+  const val = chipVal(it);   // EN (picks 키 + 프롬프트 원문)
+  const txt = chipTxt(it);   // 현재 언어 표시용
+  const id = `${cat}_${val}`;
+  return `<span class="chip c-ok ${S.picks[id]?'sel':''}" onclick="togglePick('${cat}','${val.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}',this)" title="${val}"><span class="chip-dot dot-ok"></span>${txt}</span>`;
+}
+
+function renderPlane() {
+  const g = document.getElementById('planeGrid');
+  const c = document.getElementById('planeChips');
+  if(!g) return;
+
+  // 현재 focus에 어울리는 플레인 강조
+  g.innerHTML = FOCUS_PLANE.map(fp=>{
+    const fits = !S.focus || fp.fitFocus.includes(S.focus);
+    const cls = S.focusPlane===fp.id ? 'sel' : (fits ? '' : 'warn-state');
+    const tag = !fits ? `<span class="ctag tag-warn">비권장</span>` : '';
+    return `<div class="btn ${cls}" onclick="selectPlane('${fp.id}')">
+      ${tag}
+      <span class="em">${fp.em}</span>
+      <span class="la">${fp.label}</span>
+      <span class="su">${fp.sub}</span>
+    </div>`;
+  }).join('');
+
+  if(S.focusPlane) {
+    const fp = FOCUS_PLANE.find(x=>x.id===S.focusPlane);
+    if(fp && fp.chips.length) {
+      const chips = fp.chips.map(it=>{
+        const val = chipVal(it); const txt = chipTxt(it);
+        const id = `plane_chip_${val}`;
+        // 표시: 현재 언어 / 툴팁: EN 고정
+        return `<span class="chip c-ok ${S.picks[id]?'sel':''}" onclick="togglePick('plane_chip','${val.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}',this)" title="${val}"><span class="chip-dot dot-ok"></span>${txt}</span>`;
+      }).join('');
+      c.innerHTML = `<div class="rec-list">${chips}</div>`;
+    } else { c.innerHTML=''; }
+  } else { c.innerHTML=''; }
+}
+
+function renderPose() {
+  const g = document.getElementById('poseGrid');
+  if(!g) return;
+
+  // 높이 그룹+방향에 따라 자연스러운 포즈 힌트
+  const hGrp = heightGroup(S.height);
+  const lowAngle = hGrp === 'low';
+  const hints = {
+    lying:    lowAngle && S.dir==='side',
+    leaning:  S.dir==='diagonal' || S.dir==='side',
+    reaching: S.focus==='hands',
+  };
+
+  g.innerHTML = POSE_CONTEXT.map(p=>{
+    const isHinted = hints[p.id];
+    const cls = S.pose===p.id ? 'sel' : '';
+    const tag = isHinted ? `<span class="ctag tag-ok">권장</span>` : '';
+    return `<div class="btn ${cls}" onclick="selectPose('${p.id}')">
+      ${tag}
+      <span class="em">${p.em}</span>
+      <span class="la">${p.label}</span>
+      <span class="su">${p.sub}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderAR() {
+  const g = document.getElementById('arGrid');
+  if(!g) return;
+  const curDistGrp = getDistGroupName(S.dist);
+
+  g.innerHTML = ASPECT_RATIO.map(ar=>{
+    const isFit = !S.dist || ar.fitDist.includes(curDistGrp);
+    const cls = S.aspectRatio===ar.id ? 'sel ar-btn' : (isFit ? 'ar-btn' : 'warn-state ar-btn');
+    const tag = isFit && S.dist
+      ? `<span class="ctag tag-ok" style="font-size:7px">${ar.reason}</span>`
+      : (!isFit && S.dist ? `<span class="ctag tag-warn" style="font-size:7px">비권장</span>` : '');
+
+    // 비율 시각화 — 박스
+    const maxW = 40, maxH = 40;
+    const ratio = ar.w / ar.h;
+    let bw, bh;
+    if(ratio >= 1) { bw = maxW; bh = Math.round(maxW / ratio); }
+    else           { bh = maxH; bw = Math.round(maxH * ratio); }
+    const preview = `<svg class="ar-preview" viewBox="0 0 ${maxW} ${maxH}" width="${maxW}" height="${maxH}" xmlns="http://www.w3.org/2000/svg">
+      <rect x="${Math.floor((maxW-bw)/2)}" y="${Math.floor((maxH-bh)/2)}" width="${bw}" height="${bh}" rx="2" fill="var(--b3)" stroke="var(--acc)" stroke-width="1.5"/>
+    </svg>`;
+
+    return `<div class="btn ${cls}" onclick="selectAR('${ar.id}')" title="${ar.reason}">
+      ${tag}
+      ${preview}
+      <span class="la">${ar.label}</span>
+      <span class="su">${ar.sub}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderLockSet() {
+  const btn = document.getElementById('lockSetBtn');
+  if(!btn) return;
+  btn.classList.toggle('active', S.lockSet);
+  btn.querySelector('.lock-set-title').textContent = S.lockSet
+    ? '✅ 거리 고정 세트 적용 중'
+    : 'Distance Lock + Foreground Anchor + Depth Separation';
+}
+
+function renderRec() {
+  const el = document.getElementById('recContent');
+  if(!S.dist||!S.dir||!S.height){el.innerHTML='';return;}
+  const rec = getRec();
+  const cats = [
+    {key:'구도',    label:'구도 (Composition)', chipCls:'c-ok',   dotCls:'dot-ok'},
+    {key:'앵글',    label:'앵글 (Angle)',        chipCls:'c-ok',   dotCls:'dot-ok'},
+    {key:'위치',    label:'위치 (Position)',      chipCls:'c-ok',   dotCls:'dot-ok'},
+    {key:'배치느낌',label:'배치 느낌 (Feel)',     chipCls:'c-warn', dotCls:'dot-warn'},
+  ];
+  let html = '';
+  if(rec) {
+    html = cats.map(cat=>{
+      const items = rec[cat.key]||[];
+      if(!items.length) return '';
+      const chips = items.map(it=>{
+        const val = chipVal(it);
+        const txt = chipTxt(it);
+        const id=`${cat.key}_${val}`;
+        // 표시: 현재 언어 / 툴팁: EN 고정
+        return `<span class="chip ${cat.chipCls} ${S.picks[id]?'sel':''}" onclick="togglePick('${cat.key}','${val.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}',this)" title="${val}"><span class="chip-dot ${cat.dotCls}"></span>${txt}</span>`;
+      }).join('');
+      return `<div class="rec-section"><div class="rec-title">${cat.label}</div><div class="rec-list">${chips}</div></div>`;
+    }).join('');
+  } else {
+    html = `<p style="color:var(--muted);font-size:12px;margin-bottom:10px">이 조합의 권장 데이터가 준비중입니다. 범용 배치 느낌을 선택하세요.</p>`;
+  }
+  // 범용 느낌
+  const feelChips = FEEL_UNIVERSAL.map(it=>{
+    const val = chipVal(it);
+    const txt = chipTxt(it);
+    const id=`feel_${val}`;
+    return `<span class="chip c-all ${S.picks[id]?'sel':''}" onclick="togglePick('feel','${val.replace(/'/g,"\\'")}',this)" title="${val}"><span class="chip-dot dot-all"></span>${txt}</span>`;
+  }).join('');
+  html+=`<div class="rec-section"><div class="rec-title" style="color:var(--acc2)">범용 배치 느낌</div><div class="rec-list">${feelChips}</div></div>`;
+  el.innerHTML = html;
+}
+
+/* ═══════════════════════════════════════════════════════
+   이벤트
+═══════════════════════════════════════════════════════ */
+function selectDist(id) {
+  S.dist = S.dist===id ? null : id;
+  S.dir=null; S.height=null; S.focus=null; S.picks={};
+  update();
+}
+function selectDir(id) {
+  S.dir = S.dir===id ? null : id;
+  S.height=null; S.focus=null; S.picks={};
+  update();
+}
+function selectHeight(id) {
+  if(constraintSt(S.dist,S.dir,id)==='no') return;
+  S.height = S.height===id ? null : id;
+  S.tilt = null; // 높이 바뀌면 틸트 초기화
+  S.focus=null; S.focusPlane=null;
+  Object.keys(S.picks).forEach(k=>{ if(k.startsWith('focus_chip_')||k.startsWith('plane_chip_')) delete S.picks[k]; });
+  update();
+}
+function selectTilt(id) {
+  S.tilt = S.tilt===id ? null : id;
+  renderTilt();
+  updatePrompt();
+}
+function selectFocus(id) {
+  S.focus = S.focus===id ? null : id;
+  Object.keys(S.picks).forEach(k=>{ if(k.startsWith('focus_chip_')) delete S.picks[k]; });
+  S.focusPlane = null; S.gaze = null;
+  Object.keys(S.picks).forEach(k=>{ if(k.startsWith('plane_chip_')) delete S.picks[k]; });
+  update();
+}
+function selectPlane(id) {
+  S.focusPlane = S.focusPlane===id ? null : id;
+  Object.keys(S.picks).forEach(k=>{ if(k.startsWith('plane_chip_')) delete S.picks[k]; });
+  renderPlane(); updatePrompt();
+}
+function selectPose(id) {
+  S.pose = S.pose===id ? null : id;
+  renderPose(); updatePrompt();
+}
+function selectSimple(key, id) {
+  S[key] = S[key]===id ? null : id;
+  if(key==='framingDensity') Object.keys(S.picks).forEach(k=>{ if(k.startsWith('density_chip_')) delete S.picks[k]; });
+  renderFocus(); updatePrompt();
+}
+function selectLens(id) {
+  S.lensEffect = S.lensEffect===id ? null : id;
+  Object.keys(S.picks).forEach(k=>{ if(k.startsWith('lens_chip_')) delete S.picks[k]; });
+  renderLens(); updatePrompt();
+}
+function togglePick(cat, val, el) {
+  const id=`${cat}_${val}`;
+  if(S.picks[id]){delete S.picks[id];el.classList.remove('sel');}
+  else{S.picks[id]=val;el.classList.add('sel');}
+  updatePrompt();
+}
+function selectAR(id) {
+  S.aspectRatio = S.aspectRatio===id ? null : id;
+  renderAR(); updatePrompt();
+}
+function toggleLockSet() {
+  S.lockSet = !S.lockSet;
+  renderLockSet(); updatePrompt();
+}
+function selectPersons(n) {
+  S.persons = S.persons === n ? 1 : n;
+  S.relCompos = S.focusSubject = S.gazeRel = S.groupCompos = null;
+  update();
+}
+function selRel(id)   { S.relCompos    = S.relCompos    === id ? null : id; update(); }
+function selFocSub(id){ S.focusSubject = S.focusSubject === id ? null : id; update(); }
+function selGazeRel(id){ S.gazeRel    = S.gazeRel      === id ? null : id; update(); }
+function selGroup(id) { S.groupCompos  = S.groupCompos  === id ? null : id; update(); }
+
+function renderPersons() {
+  [1,2,3].forEach(n => {
+    document.getElementById(`pb${n}`).classList.toggle('sel', S.persons === n);
+  });
+  document.getElementById('rel2Panel').style.display = S.persons===2 ? '' : 'none';
+  document.getElementById('rel3Panel').style.display = S.persons===3 ? '' : 'none';
+
+  if (S.persons === 2) {
+    document.getElementById('relGrid').innerHTML = REL_COMPOSITION.map(r=>
+      `<div class="btn${S.relCompos===r.id?' sel':''}" onclick="selRel('${r.id}')">
+        <span class="em">${r.em}</span><span class="la">${r.label}</span><span class="su">${r.kr}</span>
+      </div>`).join('');
+    document.getElementById('focusSubjectGrid').innerHTML = FOCUS_SUBJECT.map(r=>
+      `<div class="btn${S.focusSubject===r.id?' sel':''}" onclick="selFocSub('${r.id}')">
+        <span class="em">${r.em}</span><span class="la">${r.label}</span><span class="su">${r.kr}</span>
+      </div>`).join('');
+    document.getElementById('gazeRelGrid').innerHTML = GAZE_REL.map(r=>
+      `<div class="btn${S.gazeRel===r.id?' sel':''}" onclick="selGazeRel('${r.id}')">
+        <span class="em">${r.em}</span><span class="la">${r.label}</span><span class="su">${r.kr}</span>
+      </div>`).join('');
+  }
+  if (S.persons === 3) {
+    document.getElementById('groupComposGrid').innerHTML = GROUP_COMPOSITION.map(r=>
+      `<div class="btn${S.groupCompos===r.id?' sel':''}" onclick="selGroup('${r.id}')">
+        <span class="em">${r.em}</span><span class="la">${r.label}</span><span class="su">${r.kr}</span>
+      </div>`).join('');
+  }
+}
+
+function resetAll() {
+  S.persons=1; S.relCompos=null; S.focusSubject=null; S.gazeRel=null; S.groupCompos=null;
+  S.dist=null;S.dir=null;S.height=null;S.tilt=null;
+  S.focus=null;S.focusPlane=null;S.pose=null;
+  S.lensEffect=null;S.framingDensity=null;S.camStability=null;S.gaze=null;
+  S.lockSet=false;S.aspectRatio=null;
+  S.picks={};
+  update();
+}
+
+function update() {
+  document.getElementById('pDir').classList.toggle('locked',!S.dist);
+  document.getElementById('pHeight').classList.toggle('locked',!S.dist||!S.dir);
+  document.getElementById('pTilt').classList.toggle('locked',!S.dist||!S.dir||!S.height);
+  document.getElementById('pFocus').classList.toggle('locked',!S.dist||!S.dir||!S.height);
+  document.getElementById('pRec').classList.toggle('locked',!S.dist||!S.dir||!S.height);
+  renderPersons();
+  renderDist(); renderDir(); renderHeight(); renderTilt(); renderFocus(); renderRec();
+  renderAR(); renderLockSet();
+  updateFlow(); updatePrompt();
+}
+
+function updateFlow() {
+  const steps=[
+    {el:'fs1',done:!!S.dist,   active:!S.dist},
+    {el:'fs2',done:!!S.dir,    active:!!S.dist&&!S.dir},
+    {el:'fs3',done:!!S.height, active:!!S.dist&&!!S.dir&&!S.height},
+    {el:'fs4',done:!!S.focus,  active:!!S.dist&&!!S.dir&&!!S.height&&!S.focus},
+    {el:'fs5',done:false,      active:!!S.dist&&!!S.dir&&!!S.height},
+    {el:'fs6',done:!!S.aspectRatio, active:!!S.dist&&!!S.dir&&!!S.height&&!S.aspectRatio},
+  ];
+  steps.forEach(s=>{
+    const el=document.getElementById(s.el);
+    if(!el) return;
+    el.classList.toggle('done',s.done);
+    el.classList.toggle('active',s.active&&!s.done);
+  });
+}
+
+function buildPrompt() {
+  const parts = [];
+
+  // ── 인원 관련
+  if(S.persons===2){
+    if(S.relCompos){const r=REL_COMPOSITION.find(x=>x.id===S.relCompos);if(r)parts.push(r.prompt);}
+    if(S.focusSubject){const r=FOCUS_SUBJECT.find(x=>x.id===S.focusSubject);if(r)parts.push(r.prompt);}
+    if(S.gazeRel){const r=GAZE_REL.find(x=>x.id===S.gazeRel);if(r)parts.push(r.prompt);}
+  }
+  if(S.persons===3){
+    if(S.groupCompos){const r=GROUP_COMPOSITION.find(x=>x.id===S.groupCompos);if(r)parts.push(r.prompt);}
+    else parts.push('group composition, three or more subjects');
+  }
+
+  // ── GROUP A: ANGLE (시점/방향) — 카메라 위치 먼저 확정
+  if(S.dir){const d=DIR.find(x=>x.id===S.dir);if(d)parts.push(d.prompt);}
+  if(S.height){const h=HEIGHT.find(x=>x.id===S.height);if(h)parts.push(h.prompt);}
+  if(S.tilt){const t=TILT.find(x=>x.id===S.tilt);if(t)parts.push(t.prompt);}
+
+  // ── GROUP B: DISTANCE (거리감)
+  if(S.dist){
+    const it=getDistItem(S.dist);
+    if(it){
+      // constraint/framing type + framingDensity 없을 때 → promptFull 사용 (문장형)
+      const useFull = it.promptFull && (it.type==='constraint'||it.type==='framing') && !S.framingDensity;
+      parts.push(useFull ? it.promptFull : it.prompt);
+    }
+  }
+
+  // ── GROUP C: FRAMING (프레이밍 범위 + 자르기 기준 + 수직 배치)
+  if(S.framingDensity){const fd=FRAMING_DENSITY.find(x=>x.id===S.framingDensity);if(fd)parts.push(fd.prompt);}
+  if(S.cropAnchor){const ca=CROP_ANCHOR.find(x=>x.id===S.cropAnchor);if(ca)parts.push(ca.prompt);}
+  if(S.verticalPlacement){const vp=VERTICAL_PLACEMENT.find(x=>x.id===S.verticalPlacement);if(vp)parts.push(vp.prompt);}
+
+  // ── GROUP D: CONSTRAINT (절대 보장 조건)
+  // anchor_full이 이미 선택되어 있으면 constraint 중복 방지
+  if(S.lockSet) LOCK_SET_PROMPTS.forEach(p=>parts.push(p));
+
+  // ── GROUP E: EMPHASIS (무엇을 강조할지)
+  if(S.focus){const f=FOCUS.find(x=>x.id===S.focus);if(f)parts.push(f.prompt);}
+  if(S.gaze){const gz=GAZE.find(x=>x.id===S.gaze);if(gz)parts.push(gz.prompt);}
+
+  // ── 나머지 (포커스 플레인, 렌즈, 포즈, 안정성, 픽스)
+  if(S.focusPlane){const fp=FOCUS_PLANE.find(x=>x.id===S.focusPlane);if(fp)parts.push(fp.prompt);}
+  if(S.lensEffect){const le=LENS_EFFECT.find(x=>x.id===S.lensEffect);if(le)parts.push(le.prompt);}
+  if(S.pose){const p=POSE_CONTEXT.find(x=>x.id===S.pose);if(p)parts.push(p.prompt);}
+  if(S.camStability){const cs=CAM_STABILITY.find(x=>x.id===S.camStability);if(cs)parts.push(cs.prompt);}
+  Object.values(S.picks).forEach(v=>parts.push(v));
+  if(S.aspectRatio){const ar=ASPECT_RATIO.find(x=>x.id===S.aspectRatio);if(ar)parts.push(ar.prompt);}
+
+  return parts.join(', ');
+}
+
+function buildDisplay() {
+  if(LANG==='en') return buildPrompt();
+  const parts=[];
+  if(S.dist){const it=getDistItem(S.dist);if(it)parts.push(it.kr||it.prompt);}
+  if(S.dir){const d=DIR.find(x=>x.id===S.dir);if(d)parts.push(d.kr||d.prompt);}
+  if(S.height){const h=HEIGHT.find(x=>x.id===S.height);if(h)parts.push(h.kr||h.prompt);}
+  if(S.tilt){const t=TILT.find(x=>x.id===S.tilt);if(t)parts.push(t.kr||t.prompt);}
+  if(S.pose){const p=POSE_CONTEXT.find(x=>x.id===S.pose);if(p)parts.push(p.kr||p.prompt);}
+  if(S.focus){const f=FOCUS.find(x=>x.id===S.focus);if(f)parts.push(f.kr||f.prompt);}
+  if(S.gaze){const gz=GAZE.find(x=>x.id===S.gaze);if(gz)parts.push(gz.kr||gz.prompt);}
+  if(S.focusPlane){const fp=FOCUS_PLANE.find(x=>x.id===S.focusPlane);if(fp)parts.push(fp.kr||fp.prompt);}
+  if(S.lensEffect){const le=LENS_EFFECT.find(x=>x.id===S.lensEffect);if(le)parts.push(le.kr||le.prompt);}
+  if(S.framingDensity){const fd=FRAMING_DENSITY.find(x=>x.id===S.framingDensity);if(fd)parts.push(fd.kr||fd.prompt);}
+  if(S.cropAnchor){const ca=CROP_ANCHOR.find(x=>x.id===S.cropAnchor);if(ca)parts.push(ca.kr||ca.prompt);}
+  if(S.verticalPlacement){const vp=VERTICAL_PLACEMENT.find(x=>x.id===S.verticalPlacement);if(vp)parts.push(vp.kr||vp.prompt);}
+  if(S.camStability){const cs=CAM_STABILITY.find(x=>x.id===S.camStability);if(cs)parts.push(cs.kr||cs.prompt);}
+  Object.values(S.picks).forEach(v=>parts.push(KR_MAP[v]||v));
+  if(S.lockSet) parts.push('거리 고정 세트 (Distance Lock + Foreground Anchor + Depth Separation)');
+  if(S.aspectRatio){const ar=ASPECT_RATIO.find(x=>x.id===S.aspectRatio);if(ar)parts.push(ar.kr||ar.prompt);}
+  return parts.join(', ');
+}
+
+// 다이나믹 프롬프트 선택 상태 {토큰인덱스: 선택된옵션인덱스}
+const DYN_PICKS = {};
+
+// 프롬프트 문자열을 파싱해서 세그먼트 배열로 분리
+// 반환: [{type:'text',val:'...'} | {type:'dyn',opts:['A','B','C'],idx:N}]
+function parseDynPrompt(str) {
+  const segs = [];
+  let cur = 0, dynIdx = 0;
+  const re = /\{([^{}]+)\}/g;
+  let m;
+  while((m = re.exec(str)) !== null) {
+    if(m.index > cur) segs.push({type:'text', val: str.slice(cur, m.index)});
+    const opts = m[1].split('|').map(s=>s.trim());
+    if(opts.length > 1) {
+      segs.push({type:'dyn', opts, idx: dynIdx++});
+    } else {
+      segs.push({type:'text', val: m[0]}); // 단일 옵션은 그냥 텍스트
+    }
+    cur = m.index + m[0].length;
+  }
+  if(cur < str.length) segs.push({type:'text', val: str.slice(cur)});
+  return segs;
+}
+
+// 세그먼트 배열 → 복사용 최종 문자열 (선택된 것은 선택값, 미선택은 {A|B} 원문)
+function resolvePrompt(segs) {
+  return segs.map(seg => {
+    if(seg.type === 'text') return seg.val;
+    const pick = DYN_PICKS[seg.idx];
+    return (pick !== undefined) ? seg.opts[pick] : `{${seg.opts.join('|')}}`;
+  }).join('');
+}
+
+// 세그먼트 배열 → 결과창 HTML
+function renderDynHTML(segs) {
+  return segs.map(seg => {
+    if(seg.type === 'text') return escHtml(seg.val);
+    const opts = seg.opts.map((opt, oi) => {
+      const isSel = DYN_PICKS[seg.idx] === oi;
+      return `<span class="dyn-opt${isSel?' dyn-sel':''}" onclick="pickDyn(${seg.idx},${oi})">${escHtml(opt)}</span>${oi<seg.opts.length-1?'<span class="dyn-sep">|</span>':''}`;
+    }).join('');
+    return `<span class="dyn-wrap"><span class="dyn-label">⚡</span>${opts}</span>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function pickDyn(dynIdx, optIdx) {
+  // 이미 선택된 걸 다시 클릭하면 해제
+  if(DYN_PICKS[dynIdx] === optIdx) delete DYN_PICKS[dynIdx];
+  else DYN_PICKS[dynIdx] = optIdx;
+  updatePrompt();
+}
+
+function updatePrompt() {
+  const raw = buildPrompt();   // EN 원문 (다이나믹 포함)
+  const out  = document.getElementById('promptOut');
+  const tags = document.getElementById('selTags');
+
+  if(raw) {
+    out.classList.remove('empty');
+    // 다이나믹 프롬프트가 있으면 rich 렌더링
+    if(raw.includes('{') && raw.includes('|')) {
+      const segs = parseDynPrompt(raw);
+      // 세그먼트가 바뀌면 DYN_PICKS 초기화 (프롬프트 구조 변경 시)
+      const dynCount = segs.filter(s=>s.type==='dyn').length;
+      // 범위 벗어난 picks 정리
+      Object.keys(DYN_PICKS).forEach(k=>{ if(Number(k)>=dynCount) delete DYN_PICKS[k]; });
+      out.innerHTML = `<span class="prompt-out-rich">${renderDynHTML(segs)}</span>`;
+      out.classList.add('has-dyn');
+    } else {
+      out.classList.remove('has-dyn');
+      // KR 모드면 한글 표시
+      const disp = (LANG==='kr') ? buildDisplay() : raw;
+      out.textContent = disp;
+    }
+  } else {
+    out.classList.remove('has-dyn');
+    out.textContent = '거리(프레이밍)부터 선택해 주세요.';
+    out.classList.add('empty');
+  }
+
+  const tagItems=[];
+  if(S.persons>1) tagItems.push(`👥${S.persons}인`);
+  if(S.relCompos){const r=REL_COMPOSITION.find(x=>x.id===S.relCompos);if(r)tagItems.push(r.kr);}
+  if(S.focusSubject){const r=FOCUS_SUBJECT.find(x=>x.id===S.focusSubject);if(r)tagItems.push(`초점:${r.kr}`);}
+  if(S.gazeRel){const r=GAZE_REL.find(x=>x.id===S.gazeRel);if(r)tagItems.push(r.kr);}
+  if(S.groupCompos){const r=GROUP_COMPOSITION.find(x=>x.id===S.groupCompos);if(r)tagItems.push(r.kr);}
+  if(S.dist){const g=getDistGroupName(S.dist);const it=getDistItem(S.dist);if(it)tagItems.push(`${g}·${it.label}`);}
+  if(S.dir){const d2=DIR.find(x=>x.id===S.dir);if(d2)tagItems.push(d2.label);}
+  if(S.height){const h=HEIGHT.find(x=>x.id===S.height);if(h)tagItems.push(h.label);}
+  if(S.tilt){const t=TILT.find(x=>x.id===S.tilt);if(t)tagItems.push(`틸트:${t.label}`);}
+  if(S.pose){const p=POSE_CONTEXT.find(x=>x.id===S.pose);if(p)tagItems.push(`자세:${p.label}`);}
+  if(S.focus){const f=FOCUS.find(x=>x.id===S.focus);if(f)tagItems.push(`포커스:${f.label}`);}
+  if(S.gaze){const gz=GAZE.find(x=>x.id===S.gaze);if(gz)tagItems.push(`시선:${gz.label}`);}
+  if(S.focusPlane){const fp=FOCUS_PLANE.find(x=>x.id===S.focusPlane);if(fp)tagItems.push(fp.label);}
+  if(S.lensEffect){const le=LENS_EFFECT.find(x=>x.id===S.lensEffect);if(le)tagItems.push(le.label);}
+  if(S.framingDensity){const fd=FRAMING_DENSITY.find(x=>x.id===S.framingDensity);if(fd)tagItems.push(fd.label);}
+  if(S.camStability){const cs=CAM_STABILITY.find(x=>x.id===S.camStability);if(cs)tagItems.push(cs.label);}
+  if(S.lockSet) tagItems.push('🔒거리고정세트');
+  if(S.aspectRatio){const ar=ASPECT_RATIO.find(x=>x.id===S.aspectRatio);if(ar)tagItems.push(`AR:${ar.label}`);}  tags.innerHTML=tagItems.map(t=>`<span class="sel-tag">${t}</span>`).join('');
+}
+
+function copyPrompt() {
+  const raw = buildPrompt(); if(!raw) return;
+  // 다이나믹 프롬프트가 있으면 현재 선택 반영해서 복사
+  let final = raw;
+  if(raw.includes('{') && raw.includes('|')) {
+    const segs = parseDynPrompt(raw);
+    final = resolvePrompt(segs);
+  }
+  navigator.clipboard.writeText(final).then(()=>{
+    const b=document.getElementById('copyBtn');
+    b.textContent='✅ 복사됨!';
+    setTimeout(()=>{b.textContent='📋 복사';},2000);
+  });
+}
+
+/* 공개 API */
+window.CamPicker={
+  getPrompt: buildPrompt,
+  getState:  ()=>({...S}),
+  reset:     resetAll,
+};
+
+// picks 역매핑용 KR_MAP (EN→KR)
+const KR_MAP = {};
+(function buildKrMap(){
+  function scanItems(arr){
+    arr.forEach(it=>{
+      if(typeof it==='object'&&it.en&&it.kr) KR_MAP[it.en]=it.kr;
+    });
+  }
+  Object.values(RECS).forEach(rec=>{ Object.values(rec).forEach(arr=>scanItems(arr)); });
+  scanItems(FEEL_UNIVERSAL);
+  FOCUS.forEach(f=>scanItems(f.chips));
+  FOCUS_PLANE.forEach(fp=>scanItems(fp.chips));
+  LENS_EFFECT.forEach(le=>scanItems(le.chips));
+  FRAMING_DENSITY.forEach(fd=>{ if(fd.chips) scanItems(fd.chips); });
+})();
+
+update();
+
+// ── postMessage 브릿지 (통합 피커와 통신) ──
+window.addEventListener('message', function(e) {
+  if (!e.data) return;
+  if (e.data.type === 'CAM_GET_PROMPT') {
+    parent.postMessage({ type: 'CAM_PROMPT', prompt: buildPrompt() }, '*');
+  }
+  if (e.data.type === 'CAM_RESET') resetAll();
+});
+(function() {
+  var _orig = updatePrompt;
+  updatePrompt = function() {
+    _orig.apply(this, arguments);
+    try { 
+      const currentPrompt = buildPrompt();
+      // 부모에게 프롬프트 전달
+      parent.postMessage({ type: 'CAM_PROMPT', prompt: currentPrompt }, '*'); 
+      
+      // 부모에게 현재 카메라 상태(S) 전달 (이 코드가 핵심입니다)
+      parent.postMessage({ 
+        type: 'CAM_SYNC', 
+        payload: JSON.parse(JSON.stringify(S)) 
+      }, '*');
+    } catch(e){}
+  };
+})();
+</script>
+</body>
+</html>

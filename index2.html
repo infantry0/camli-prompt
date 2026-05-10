@@ -1,0 +1,1873 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>조명 피커 v1</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#090d13;--s1:#111622;--s2:#181f2e;--s3:#1e2840;
+  --b1:#1e2840;--b2:#2a3650;--b3:#3a4a6a;
+  --text:#cdd6f4;--muted:#6272a4;--dim:#3a4060;
+  --acc:#7aa2f7;--acc2:#bb9af7;--grn:#9ece6a;--yel:#e0af68;--red:#f7768e;--cyn:#7dcfff;--org:#ff9e64;
+  --ok:rgba(122,162,247,0.15);--ok-b:#7aa2f7;
+  --warn:rgba(224,175,104,0.12);--warn-b:#e0af68;
+  --r:7px;--r2:11px;
+}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;font-size:13px;padding:18px;max-width:1100px;margin:0 auto}
+
+.hd{display:flex;align-items:baseline;gap:10px;margin-bottom:4px;flex-wrap:wrap}
+.hd h1{font-size:16px;font-weight:700}
+.badge{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);background:var(--s2);border:1px solid var(--b1);border-radius:4px;padding:1px 7px}
+.sub{color:var(--muted);font-size:11px;margin-bottom:16px}
+
+/* flow */
+.flow{display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.flow-step{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.flow-step .num{width:20px;height:20px;border-radius:50%;border:1px solid var(--b2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.flow-step.active .num{background:var(--acc);border-color:var(--acc);color:#0a0f1e}
+.flow-step.active{color:var(--text)}
+.flow-step.done .num{background:var(--grn);border-color:var(--grn);color:#0a0f1e}
+.flow-arr{color:var(--dim);font-size:12px}
+
+/* panel */
+.panel{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);padding:14px 16px;margin-bottom:12px}
+.panel.locked{opacity:.32;pointer-events:none}
+.ptitle{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.ptitle::after{content:'';flex:1;height:1px;background:var(--b1)}
+.ptitle .step-n{color:var(--acc);font-family:'JetBrains Mono',monospace}
+
+/* legend */
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:10px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:4px}
+.ld{width:8px;height:8px;border-radius:2px}
+
+/* 공통 버튼 */
+.btn{background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);padding:7px 8px;cursor:pointer;text-align:center;transition:border-color .12s,background .12s;user-select:none;position:relative;width:100%}
+.btn:hover{border-color:var(--b3);background:var(--s3)}
+.btn.sel{border-color:var(--ok-b);background:var(--ok)}
+.btn .la{font-size:11px;font-weight:700;display:block}
+.btn .su{font-size:9px;color:var(--muted);margin-top:2px;display:block}
+.btn .em{font-size:15px;display:block;margin-bottom:3px}
+.btn .ctag{position:absolute;top:3px;right:4px;font-size:8px;font-family:'JetBrains Mono',monospace;border-radius:3px;padding:1px 4px}
+.tag-ok{background:rgba(158,206,106,.18);color:var(--grn)}
+.tag-warn{background:rgba(224,175,104,.18);color:var(--yel)}
+
+/* 그리드 */
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+
+/* 방향 다이얼 */
+.dir-dial-wrap{display:flex;gap:16px;align-items:flex-start}
+.dir-dial{position:relative;width:180px;height:180px;flex-shrink:0}
+.dir-dial svg{width:100%;height:100%}
+.dir-btn-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;flex:1}
+
+/* 고유명사 패널 */
+.named-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.named-btn{background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);padding:10px 8px;cursor:pointer;text-align:center;transition:all .15s;user-select:none;position:relative}
+.named-btn:hover{border-color:var(--b3);background:var(--s3)}
+.named-btn.sel{border-color:var(--org);background:rgba(255,158,100,.12)}
+.named-btn .nb-em{font-size:18px;display:block;margin-bottom:4px}
+.named-btn .nb-la{font-size:12px;font-weight:700;display:block;color:var(--text)}
+.named-btn .nb-sub{font-size:9px;color:var(--muted);margin-top:3px;display:block;line-height:1.4}
+.named-btn .nb-dual{position:absolute;top:4px;right:5px;font-size:8px;font-family:'JetBrains Mono',monospace;color:var(--acc2);background:rgba(187,154,247,.15);border:1px solid rgba(187,154,247,.3);border-radius:3px;padding:0 4px}
+
+/* 자동 제안 칩 */
+.auto-suggest{background:var(--s2);border:1px dashed var(--b2);border-radius:var(--r);padding:10px 12px;margin-top:8px}
+.auto-suggest-title{font-size:9px;font-weight:700;color:var(--cyn);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;display:flex;align-items:center;gap:5px}
+.auto-suggest-title::before{content:'⚡';font-size:10px}
+.suggest-chips{display:flex;flex-wrap:wrap;gap:5px}
+.s-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:5px;font-size:10px;cursor:pointer;border:1px solid;transition:all .12s;user-select:none;font-family:'JetBrains Mono',monospace}
+.s-chip.c-auto{background:rgba(125,207,255,.08);border-color:rgba(125,207,255,.3);color:var(--cyn)}
+.s-chip.c-auto:hover,.s-chip.c-auto.sel{background:rgba(125,207,255,.2);border-color:var(--cyn)}
+.s-chip.c-warn{background:rgba(224,175,104,.08);border-color:rgba(224,175,104,.3);color:var(--yel)}
+
+/* 슬라이더형 선택 */
+.slider-row{display:flex;gap:4px;align-items:stretch}
+.slider-btn{flex:1;background:var(--s2);border:1px solid var(--b1);border-radius:5px;padding:7px 4px;cursor:pointer;text-align:center;transition:all .12s;user-select:none}
+.slider-btn:hover{border-color:var(--b3)}
+.slider-btn.sel{background:var(--ok);border-color:var(--ok-b)}
+.slider-btn .sl-la{font-size:10px;font-weight:700;display:block}
+.slider-btn .sl-su{font-size:8px;color:var(--muted);display:block;margin-top:1px}
+
+/* 2광원 배지 */
+.dual-badge{display:inline-flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--acc2);background:rgba(187,154,247,.12);border:1px solid rgba(187,154,247,.28);border-radius:4px;padding:2px 7px;margin-left:6px}
+
+/* 결과창 */
+.result{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);padding:14px 16px}
+.res-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap}
+.res-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+.sel-tags{display:flex;flex-wrap:wrap;gap:5px}
+.sel-tag{font-family:'JetBrains Mono',monospace;font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid var(--b2);background:var(--s2);color:var(--cyn)}
+.prompt-out{background:var(--bg);border:1px solid var(--b2);border-radius:var(--r);padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--grn);min-height:50px;word-break:break-all;white-space:pre-wrap;line-height:1.7;margin-bottom:10px}
+.prompt-out.empty{color:var(--dim);font-style:italic;font-family:'Noto Sans KR',sans-serif;font-size:12px}
+.btn-row{display:flex;gap:8px}
+.btn-copy{flex:1;background:var(--acc);color:#07111f;border:none;border-radius:var(--r);padding:10px;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s}
+.btn-copy:hover{background:var(--acc2)}
+.btn-reset{background:transparent;color:var(--muted);border:1px solid var(--b2);border-radius:var(--r);padding:10px 16px;font-family:'Noto Sans KR',sans-serif;font-size:12px;cursor:pointer;transition:all .13s}
+.btn-reset:hover{border-color:var(--red);color:var(--red)}
+
+/* 섹션 구분 */
+.section-sep{height:1px;background:var(--b1);margin:12px 0}
+.section-label{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.section-label::after{content:'';flex:1;height:1px;background:var(--b1)}
+
+/* 카메라 연동 배너 */
+.cam-link{background:rgba(122,162,247,.06);border:1px solid rgba(122,162,247,.2);border-radius:var(--r);padding:8px 12px;margin-bottom:4px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
+.cam-link .cam-state{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--acc)}
+.sync-tag{display:inline-flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px;cursor:pointer;transition:.15s;border:1px solid;user-select:none}
+.sync-tag.from-cam{color:var(--cyn);background:rgba(125,207,255,.1);border-color:rgba(125,207,255,.3)}
+.sync-tag.from-cam:hover{background:rgba(125,207,255,.22)}
+.sync-tag.manual{color:var(--grn);background:rgba(158,206,106,.1);border-color:rgba(158,206,106,.3)}
+.sync-tag.manual:hover{background:rgba(158,206,106,.22)}
+
+/* lang toggle */
+.lang-toggle{display:flex;align-items:center;gap:0;border:1px solid var(--b2);border-radius:6px;overflow:hidden;margin-left:auto}
+.lang-btn{padding:3px 10px;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .12s}
+.lang-btn.active{background:var(--acc);color:#07111f}
+.lang-btn:first-child{border-right:1px solid var(--b2)}
+
+/* OR 구분 */
+.or-divider{display:flex;align-items:center;gap:10px;margin:12px 0;font-size:10px;color:var(--dim);font-family:'JetBrains Mono',monospace}
+.or-divider::before,.or-divider::after{content:'';flex:1;height:1px;background:var(--b1)}
+
+@media(max-width:700px){
+  .named-grid{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(2,1fr)}
+  .g5{grid-template-columns:repeat(3,1fr)}
+  .dir-dial-wrap{flex-direction:column}
+  .dir-dial{width:140px;height:140px}
+}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <h1>💡 조명 피커</h1>
+  <span class="badge">v1.8 — + Scene↔Subject Constraint · Prompt Mixing · Light Interaction</span>
+  <div class="lang-toggle" style="margin-left:8px">
+    <button class="lang-btn active" id="btnEN" onclick="setLang('en')">EN</button>
+    <button class="lang-btn" id="btnKR" onclick="setLang('kr')">KR</button>
+  </div>
+</div>
+<p class="sub">주광원 → 그림자 → 윤곽 분리 → 환경광 순으로 선택 / 또는 고유명사 패턴 바로 선택</p>
+
+<div class="flow">
+  <div class="flow-step active" id="fs1"><span class="num">1</span>주광원</div>
+  <span class="flow-arr">›</span>
+  <div class="flow-step" id="fs2"><span class="num">2</span>그림자</div>
+  <span class="flow-arr">›</span>
+  <div class="flow-step" id="fs3"><span class="num">3</span>윤곽</div>
+  <span class="flow-arr">›</span>
+  <div class="flow-step" id="fs4"><span class="num">4</span>환경광</div>
+</div>
+
+<div class="legend">
+  <span><span class="ld" style="background:var(--grn)"></span>권장</span>
+  <span><span class="ld" style="background:var(--yel)"></span>주의</span>
+  <span><span class="ld" style="background:var(--org)"></span>고유명사</span>
+  <span><span class="ld" style="background:var(--acc2)"></span>2광원 명시</span>
+</div>
+
+<!-- 카메라 연동 배너 -->
+<div class="cam-link" id="camLinkBar">
+  <span>📷</span>
+  <span style="font-weight:600">카메라 픽커 연동</span>
+  <span id="camInjectBadge" style="display:none;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--grn);background:rgba(158,206,106,.12);border:1px solid rgba(158,206,106,.3);border-radius:3px;padding:1px 6px">📌 프롬프트 개입 중</span>
+  <span style="margin-left:auto;font-size:10px;color:var(--dim)" id="camConnStatus">미연결 — 단독 사용 중</span>
+</div>
+
+<!-- 연동 상태 태그 행 -->
+<div id="camSyncRow" style="display:none;padding:8px 12px;background:rgba(122,162,247,.05);border:1px solid rgba(122,162,247,.15);border-radius:6px;margin-top:6px;display:none">
+  <div style="font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.05em;margin-bottom:6px">📡 카메라 연동값 — 클릭하면 수동으로 전환</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap" id="camSyncTags"></div>
+</div>
+
+<!-- 연동 경고 / 권장 배너 -->
+<div id="frameWarnBar" style="display:none;background:rgba(224,175,104,.08);border:1px solid rgba(224,175,104,.3);border-radius:6px;padding:7px 12px;margin-top:6px;font-size:10px;color:var(--yel)">
+  ⚠️ <span id="frameWarnText"></span>
+</div>
+<div id="dirSyncWarnBar" style="display:none;background:rgba(158,206,106,.06);border:1px solid rgba(158,206,106,.25);border-radius:6px;padding:7px 12px;margin-top:6px;font-size:10px;color:var(--grn)">
+  💡 <span id="dirSyncWarnText"></span>
+</div>
+<div class="panel" id="pPersons">
+  <div class="ptitle"><span class="step-n" style="color:var(--acc2)">👥</span> 인원 설정 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">2인 선택 시 전용 패턴 활성화</span></div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+    <div class="named-btn" id="lpb1" onclick="selectPersonsL(1)">
+      <span class="nb-em">🧍</span><span class="nb-la">1인</span><span class="nb-sub">기본 모드</span>
+    </div>
+    <div class="named-btn" id="lpb2" onclick="selectPersonsL(2)">
+      <span class="nb-em">🧍🧍</span><span class="nb-la">2인</span><span class="nb-sub">2인 전용 패턴 활성</span>
+    </div>
+    <div class="named-btn" id="lpb3" onclick="selectPersonsL(3)">
+      <span class="nb-em">👥+</span><span class="nb-la">3인+</span><span class="nb-sub">장면 조명 권장</span>
+    </div>
+  </div>
+  <div id="multiNote" style="display:none;margin-top:8px;font-size:10px;color:var(--muted);padding:6px 10px;background:var(--s2);border-radius:5px;border:1px solid var(--b1)">
+    💡 3인+ 는 개별 조명 제어보다 <strong style="color:var(--cyn)">장면 전체의 빛 환경 묘사</strong>가 AI에게 더 효과적입니다. 고유명사 패턴 또는 환경광 위주로 선택하세요.
+  </div>
+</div>
+
+<!-- ── MACRO PRESETS (스토리텔링 프리셋) ── -->
+<div class="panel" id="pMacro">
+  <div class="ptitle"><span class="step-n" style="color:var(--grn)">⚡</span> 빠른 프리셋 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">스토리텔링 네이밍 — 원클릭 완성형</span></div>
+  <div class="named-grid" id="macroGrid"></div>
+</div>
+
+<!-- ── NAMED PATTERNS (고유명사) ── -->
+<div class="panel" id="pNamed">
+  <div class="ptitle"><span class="step-n" style="color:var(--org)">★</span> 고유명사 패턴 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">AI가 이미 학습한 조명 패턴 — 단독 사용 가능</span></div>
+  <div class="named-grid" id="namedGrid"></div>
+  <div class="or-divider">또는 아래 Physical로 직접 조합</div>
+</div>
+
+<!-- ── STEP 0: 광원 존재 암시 ── -->
+<div class="panel" id="pPresence">
+  <div class="ptitle"><span class="step-n" style="color:var(--cyn)">00</span> 광원 암시 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">Light Presence — 선택 사항 · 이후 레이어 일관성 향상</span></div>
+  <div class="slider-row" id="presenceRow"></div>
+</div>
+
+<!-- ── SCENE LIGHT: 환경 앵커 ── -->
+<div class="panel" id="pSceneLight">
+  <div class="ptitle"><span class="step-n" style="color:var(--yel)">🌍</span> Scene Light <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">환경 앵커 — 그림자 방향의 기준이 됨 · 선택 사항</span></div>
+
+  <div class="section-label">자연광</div>
+  <div class="g5" id="sceneLightNaturalGrid" style="margin-bottom:10px"></div>
+
+  <div class="section-label">인공광</div>
+  <div class="g3" id="sceneLightArtificialGrid"></div>
+
+  <div id="sceneSubjectWarn" style="display:none;background:rgba(247,118,142,.08);border:1px solid rgba(247,118,142,.28);border-radius:6px;padding:8px 12px;margin-top:10px;font-size:10px;color:var(--red)">
+    ⚡ <strong>Scene↔Subject 충돌</strong> — <span id="sceneSubjectWarnText"></span>
+  </div>
+</div>
+
+<!-- ── STEP 1: 주광원 ── -->
+<div class="panel" id="pLight">
+  <div class="ptitle"><span class="step-n">01</span> 주광원 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">방향 · 높이 · 성질</span></div>
+
+  <div id="silhouetteWarning" style="display:none;background:rgba(247,118,142,.08);border:1px solid rgba(247,118,142,.3);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:10px;color:var(--red)">
+    ⚠️ <strong>Silhouette 모드</strong> — 인물 전면을 밝히는 주광원은 실루엣과 충돌할 수 있습니다. Front / Front-Side 방향 사용 시 주의하세요.
+  </div>
+
+  <div class="section-label">방향</div>
+  <div class="g5" id="dirGrid" style="margin-bottom:12px"></div>
+
+  <div class="section-label">높이</div>
+  <div class="g3" id="heightGrid" style="margin-bottom:12px"></div>
+
+  <div class="section-label">성질 (하드 / 소프트)</div>
+  <div class="slider-row" id="qualityRow"></div>
+</div>
+
+<!-- ── STEP 2: 그림자 ── -->
+<div class="panel locked" id="pShadow">
+  <div class="ptitle"><span class="step-n">02</span> 그림자 묘사 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">주광원 반대쪽 현상</span></div>
+
+  <!-- 자동 제안 -->
+  <div class="auto-suggest" id="shadowSuggest">
+    <div class="auto-suggest-title">주광원 기반 자동 제안</div>
+    <div class="suggest-chips" id="shadowSuggestChips"></div>
+  </div>
+
+  <div class="section-sep"></div>
+
+  <div class="section-label" style="margin-top:8px">농도</div>
+  <div class="slider-row" id="shadowDepthRow" style="margin-bottom:10px"></div>
+
+  <div class="section-label">엣지</div>
+  <div class="slider-row" id="shadowEdgeRow"></div>
+
+  <div class="section-sep"></div>
+  <div class="section-label">그림자 색온도</div>
+  <div class="slider-row" id="shadowColorRow"></div>
+
+  <div class="section-sep"></div>
+  <div class="section-label">형태 패턴 <span style="font-size:9px;color:var(--muted);font-weight:300;margin-left:4px">얼굴 어디에 그림자가 생기는지</span></div>
+  <div class="g5" id="shadowPatternGrid"></div>
+</div>
+
+<!-- ── STEP 3: 윤곽 분리 ── -->
+<div class="panel locked" id="pRim">
+  <div class="ptitle"><span class="step-n">03</span> 윤곽 분리 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">림 효과 — 선택 사항</span></div>
+  <div class="g5" id="rimGrid" style="margin-bottom:10px"></div>
+  <div class="section-label" id="rimColorLabel" style="display:none">림 색온도</div>
+  <div class="slider-row" id="rimColorRow"></div>
+</div>
+
+<!-- ── STEP 4: 환경광 ── -->
+<div class="panel locked" id="pAmbient">
+  <div class="ptitle"><span class="step-n">04</span> 환경광 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">전체 노출 느낌</span></div>
+  <div class="g5" id="ambientGrid"></div>
+</div>
+
+<!-- ── STEP 4.5: 광원 감쇠 + 피부 반사 ── -->
+<div class="panel locked" id="pAdvanced">
+  <div class="ptitle"><span class="step-n" style="color:var(--cyn)">✦</span> 고급 옵션 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">Color Contrast · Falloff · Skin Response · Light Interaction</span></div>
+
+  <div class="section-label">컬러 대비 (Color Contrast)</div>
+  <div class="g3" id="colorContrastGrid" style="margin-bottom:12px"></div>
+
+  <div class="section-sep"></div>
+  <div class="section-label">광원 감쇠 (Falloff)</div>
+  <div class="slider-row" id="falloffRow" style="margin-bottom:12px"></div>
+
+  <div class="section-label">피부 반사 특성 (Skin Response)</div>
+  <div class="g4" id="skinGrid" style="margin-bottom:12px"></div>
+
+  <div class="section-sep"></div>
+  <div class="section-label">간접광 · 빛 상호작용 <span style="font-size:9px;color:var(--muted);font-weight:300;margin-left:4px">Light Interaction — Scene과 Subject를 물리적으로 연결</span></div>
+  <div class="g3" id="lightInteractionGrid"></div>
+</div>
+
+<!-- ── 결과 ── -->
+<div class="result">
+  <div class="res-top">
+    <span class="res-label">💡 조명 프롬프트</span>
+    <div class="sel-tags" id="selTags"></div>
+  </div>
+  <div class="prompt-out empty" id="promptOut">주광원 또는 고유명사 패턴을 선택해 주세요.</div>
+  <div class="btn-row">
+    <button class="btn-copy" id="copyBtn" onclick="copyPrompt()">📋 복사</button>
+    <button class="btn-reset" onclick="resetAll()">↺ 초기화</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── 언어 ──────────────────────────────────────────────────────────────────────
+let LANG = 'en';
+function setLang(l) {
+  LANG = l;
+  document.getElementById('btnEN').classList.toggle('active', l==='en');
+  document.getElementById('btnKR').classList.toggle('active', l==='kr');
+  updatePrompt();
+}
+
+// ── 데이터 ────────────────────────────────────────────────────────────────────
+
+// 고유명사 패턴
+const NAMED_PATTERNS = [
+  {
+    id:'rembrandt', em:'🎨', label:'Rembrandt', kr:'렘브란트',
+    sub:'눈 아래 삼각 하이라이트',
+    prompt:'Rembrandt lighting, triangle highlight under the eye, gradual falloff across the face, deep shadow on the opposite cheek',
+    dual:false,
+  },
+  {
+    id:'butterfly', em:'🦋', label:'Butterfly', kr:'버터플라이',
+    sub:'코 아래 나비 그림자, 뷰티',
+    prompt:'butterfly lighting, overhead front glow, soft butterfly-shaped shadow under nose, radiant skin texture, even soft fill, blooming highlights',
+    dual:true,
+  },
+  {
+    id:'split', em:'⚡', label:'Split', kr:'스플릿',
+    sub:'얼굴 정확히 반 분할',
+    prompt:'split lighting, half face in shadow, razor-sharp shadow lines, stark light-and-dark divide, one side fully illuminated the other in deep shadow',
+    dual:false,
+  },
+  {
+    id:'loop', em:'🔁', label:'Loop', kr:'루프',
+    sub:'루프 코그림자, 자연스러운',
+    prompt:'loop lighting, small loop shadow falling toward the corner of the mouth, natural facial depth',
+    dual:false,
+  },
+  {
+    id:'broad', em:'☀️', label:'Broad', kr:'브로드',
+    sub:'카메라 쪽이 밝음, 넓어 보임',
+    prompt:'broad lighting, lit side facing camera, chiselled highlights on near cheek, wider facial appearance',
+    dual:false,
+  },
+  {
+    id:'short', em:'🌒', label:'Short', kr:'쇼트',
+    sub:'카메라 쪽이 어두움, 극적',
+    prompt:'short lighting, shadow side facing camera, deep shadow dominant on near side, slimming dramatic effect',
+    dual:false,
+  },
+  {
+    id:'rim_only', em:'🌙', label:'Rim Only', kr:'림 온리',
+    sub:'윤곽선만 빛, 실루엣',
+    prompt:'rim lighting only, glowing silhouette, edge-defining halo, shimmering outlines, subject in deep shadow',
+    dual:false,
+  },
+  {
+    id:'practical', em:'💡', label:'Practical', kr:'프랙티컬',
+    sub:'화면 안에 광원이 보임',
+    prompt:'practical lighting, visible light source in scene, motivated lighting, warm pool of light',
+    dual:false,
+  },
+  {
+    id:'noir', em:'🎭', label:'Noir Contrast', kr:'느와르',
+    sub:'극단적 흑백 대비, 어둠 지배',
+    prompt:'noir contrast lighting, void-like shadows, inky blacks, extreme chiaroscuro, shadow dominant, obscured details in darkness',
+    dual:false,
+  },
+  {
+    id:'golden_hour', em:'🌅', label:'Golden Hour', kr:'골든 아워',
+    sub:'황금빛 색온도, 따뜻한 앰버',
+    prompt:'golden hour lighting, warm amber glow, soft long shadows, low angle warmth, skin bathed in golden light, gentle backlit haze',
+    dual:false,
+  },
+  {
+    id:'neon_cyber', em:'🌆', label:'Neon Cyber', kr:'네온 사이버',
+    sub:'보색 네온, 사이버펑크',
+    prompt:'neon cyberpunk lighting, complementary colored lights, vivid color contrast, cyan and magenta neon glow, hard colored shadows',
+    dual:true,
+  },
+  {
+    id:'window_lit', em:'🪟', label:'Window Lit', kr:'윈도우 라이트',
+    sub:'북향 자연광, 크고 부드러운',
+    prompt:'window lighting, north light, large soft natural light source from one side, seamless light transition, gentle wrap around subject, visible skin texture under soft shade',
+    dual:false,
+  },
+  {
+    id:'chiaroscuro', em:'🖼️', label:'Chiaroscuro', kr:'키아로스쿠로',
+    sub:'회화적 극명암, 빛과 어둠의 대비',
+    prompt:'chiaroscuro lighting, extreme contrast between light and shadow, painterly dramatic illumination, deep inky blacks, luminous highlights emerging from darkness',
+    dual:false,
+  },
+  {
+    id:'clamshell', em:'🐚', label:'Clamshell', kr:'클램쉘',
+    sub:'뷰티 상하 소프트, 그림자 제거',
+    prompt:'clamshell lighting, soft top and bottom light balanced, beauty lighting, shadows under nose and chin minimized, even flattering illumination, glowing complexion',
+    dual:true,
+  },
+  {
+    id:'toplight_cinematic', em:'🎬', label:'Toplight Cinematic', kr:'탑라이트 시네마틱',
+    sub:'강한 하향광, 극적 얼굴 그림자',
+    prompt:'cinematic top light, strong downward illumination, deep shadows beneath brow and cheekbones, eye sockets recessed in shadow, dramatic facial structure emphasis',
+    dual:false,
+  },
+  // ── 2인 특화 패턴 ──
+  {
+    id:'interrogation', em:'🔦', label:'Interrogation', kr:'인터로게이션',
+    sub:'한 명 조명, 한 명 어둠',
+    prompt:'interrogation lighting, one subject harshly lit from above, second subject in deep shadow',
+    dual:false, multi:2,
+  },
+  {
+    id:'shared_candle', em:'🕯️', label:'Shared Candle', kr:'쉐어드 캔들',
+    sub:'두 사람 사이 중앙 광원',
+    prompt:'candlelight between two subjects, warm central light source, both faces softly lit from center, intimate glow',
+    dual:true, multi:2,
+  },
+  {
+    id:'silhouette_pair', em:'👥', label:'Silhouette Pair', kr:'실루엣 페어',
+    sub:'둘 다 역광 실루엣',
+    prompt:'both subjects backlit, silhouette pair, strong backlight, subjects in shadow against bright background',
+    dual:false, multi:2,
+  },
+  {
+    id:'split_subjects', em:'⚔️', label:'Split Subjects', kr:'스플릿 서브젝트',
+    sub:'두 사람이 각각 빛/어둠',
+    prompt:'two subjects lit from opposite sides, one in light one in shadow, dramatic duality',
+    dual:true, multi:2,
+  },
+];
+const LIGHT_DIR = [
+  {id:'front',      label:'Front',       kr:'정면',      em:'⬆',  prompt:'front-facing illumination, even brightness across the face, minimal shadows'},
+  {id:'front_45',   label:'Front-Side 45°', kr:'전방 45°', em:'↗', prompt:'45-degree front side lighting, one side of the face slightly more illuminated than the other'},
+  {id:'side',       label:'Side',        kr:'측면',      em:'➡',  prompt:'one side of the face strongly illuminated, deep shadow on the opposite side, brightness falls off sharply across the face'},
+  {id:'back_45',    label:'Back-Side 45°', kr:'후방 45°', em:'↘', prompt:'subject partially backlit, edges of the face catch light, front of face in shadow'},
+  {id:'back',       label:'Back',        kr:'역광',      em:'⬇',  prompt:'backlight contre-jour, subject silhouetted, bright glow outlining the edges from behind'},
+];
+
+// 주광원 높이
+const LIGHT_HEIGHT = [
+  {id:'overhead',   label:'Overhead',    kr:'탑라이트',   em:'🔆', prompt:'shadows forming beneath facial features, eye sockets recessed in shadow, upper planes of the face more exposed, toplight'},
+  {id:'high',       label:'High',        kr:'하이 앵글',  em:'↖',  prompt:'upper face receives more exposure, shadows fall slightly downward across features'},
+  {id:'eye',        label:'Eye Level',   kr:'아이 레벨',  em:'→',  prompt:'eye-level illumination, natural facial exposure, balanced light across features'},
+  {id:'low',        label:'Low',         kr:'로우',       em:'↙',  prompt:'lower face more illuminated, shadows cast upward slightly across features'},
+  {id:'under',      label:'Under',       kr:'언더라이트', em:'🔅', prompt:'shadows cast upward across the face, lower face appears most illuminated, unusual upward shadow direction, chin and jaw highlighted'},
+];
+
+// 주광원 성질
+const LIGHT_QUALITY = [
+  {id:'hard',   label:'Hard',  kr:'하드',  su:'선명한 그림자선',
+   prompt:'sharp shadow boundaries, high contrast edge transitions, defined shadow lines, chiselled highlights'},
+  {id:'mixed',  label:'Mixed', kr:'혼합',  su:'소프트 키 + 하드 엣지',
+   prompt:'overall soft illumination with localized sharp highlights, defined highlights with gentle fill'},
+  {id:'soft',   label:'Soft',  kr:'소프트', su:'확산광, 부드러운',
+   prompt:'smooth tonal transitions, diffused shadow edges, gentle falloff across surfaces, velvety brightness, wrapped light'},
+];
+
+// 그림자 자동 제안 (방향 기반)
+const SHADOW_SUGGEST = {
+  front:    [{label:'no prominent shadow', kr:'그림자 최소', prompt:'minimal shadows, even illumination'}],
+  front_45: [
+    {label:'shadow falls to one side', kr:'한쪽으로 그림자', prompt:'shadow falls to one side of the face'},
+    {label:'soft side shadow', kr:'부드러운 사이드 그림자', prompt:'soft shadow on the opposite side'},
+  ],
+  side: [
+    {label:'deep shadow opposite side', kr:'반대편 깊은 그림자', prompt:'deep shadow on opposite side of face'},
+    {label:'high contrast split', kr:'고대비 분할', prompt:'high contrast light and shadow, dramatic split'},
+  ],
+  back_45: [
+    {label:'subject mostly in shadow', kr:'피사체 대부분 어두움', prompt:'subject partially silhouetted, shadow dominant on front'},
+    {label:'rim-lit, front in shadow', kr:'림라이트, 앞면 어두움', prompt:'rim-lit subject, front face in shadow'},
+  ],
+  back: [
+    {label:'full silhouette shadow', kr:'실루엣 그림자', prompt:'subject in shadow, backlit silhouette'},
+    {label:'glow around subject', kr:'피사체 주변 글로우', prompt:'light glow around subject edges from behind'},
+  ],
+};
+
+// 그림자 농도
+const SHADOW_DEPTH = [
+  {id:'none',     label:'None',    kr:'없음',    su:'그림자 제거',  prompt:''},
+  {id:'subtle',   label:'Subtle',  kr:'약함',    su:'투명한 그림자', prompt:'subtle shadows, transparent shadows, visible skin texture under shade'},
+  {id:'moderate', label:'Moderate',kr:'보통',    su:'자연스러운',   prompt:'moderate shadow depth, natural facial depth'},
+  {id:'deep',     label:'Deep',    kr:'깊음',    su:'극적인 명암',  prompt:'deep shadows, high contrast, void-like shadows'},
+  {id:'extreme',  label:'Extreme', kr:'극단적',  su:'실루엣 수준',  prompt:'extreme shadow depth, inky blacks, obscured details in dark areas, near silhouette'},
+];
+
+// 그림자 엣지
+const SHADOW_EDGE = [
+  {id:'hard',      label:'Hard Edge',   kr:'하드 엣지',  su:'선명한 경계선',  prompt:'hard shadow edge, razor-sharp shadow lines, stark black-and-white divide'},
+  {id:'natural',   label:'Natural',     kr:'자연스러운', su:'중간 경계',      prompt:'natural shadow falloff'},
+  {id:'feathered', label:'Feathered',   kr:'페더드',    su:'부드러운 전환',  prompt:'soft feathered shadow edge, gradient shadows, smudged edges, dissolving into darkness'},
+];
+
+// 윤곽 분리 (림)
+const RIM_EFFECT = [
+  {id:'none',       label:'없음',              em:'✕', prompt:''},
+  {id:'separation', label:'BG Separation',     em:'▣', prompt:'subject clearly separated from background, edges of the subject remain visually distinct, subtle brightness contrast outlining the figure'},
+  {id:'subtle',     label:'Subtle Rim',        em:'〇', prompt:'subtle rim light, gentle edge separation from background'},
+  {id:'strong',     label:'Strong Rim',        em:'◎', prompt:'strong rim light, clear separation from background'},
+  {id:'hair',       label:'Hair Light',        em:'✨', prompt:'hair light, top rim separation, luminous hair'},
+  {id:'kicker',     label:'Kicker',            em:'⚡', prompt:'kicker light, angular accent light from behind and to the side, sharp highlight on cheek or shoulder edge, adds dimensional pop'},
+  {id:'fill',       label:'Fill Light',        em:'🔆', prompt:'soft fill light reducing shadow density, shadow lift, detail preserved in dark areas'},
+  {id:'warm_rim',   label:'Warm Rim',          em:'🔥', prompt:'warm rim light, orange-tinted edge light'},
+  {id:'cool_rim',   label:'Cool Rim',          em:'❄️', prompt:'cool rim light, blue-tinted edge light'},
+  {id:'colored',    label:'Colored Rim',       em:'🌈', prompt:'{warm|cool|complementary} colored rim light'},
+];
+
+// 환경광
+const AMBIENT = [
+  {id:'flat',      label:'Flat Fill',   kr:'플랫 필',    em:'□',  prompt:'flat fill light, even illumination, minimal shadows'},
+  {id:'dramatic',  label:'Dramatic',    kr:'드라마틱',   em:'◆',  prompt:'dramatic lighting, high contrast, deep shadows, strong chiaroscuro'},
+  {id:'moody',     label:'Moody',       kr:'무디',       em:'🌫', prompt:'moody atmosphere, low key, cinematic haze, muted tonal range, volumetric atmosphere'},
+  {id:'highkey',   label:'High Key',    kr:'하이 키',    em:'☁️', prompt:'high key lighting, bright airy feel, blooming highlights, vanishing outlines in white, overexposed aesthetics'},
+  {id:'lowkey',    label:'Low Key',     kr:'로우 키',    em:'🌑', prompt:'low key lighting, shrouded in mystery, dominant negative space, minimalist luminance, shadow dominant'},
+];
+
+// 그림자 형태 패턴
+const SHADOW_PATTERN = [
+  {id:'face_contour',  label:'Face Contour',  kr:'얼굴 윤곽',   su:'얼굴 전체 윤곽',  em:'🫥',
+   prompt:'shadow wraps around facial contours, defining the overall face shape'},
+  {id:'eye_socket',    label:'Eye Socket',    kr:'눈 소켓',     su:'눈 주위 깊은 음영', em:'👁️',
+   prompt:'eye sockets recessed in deep shadow, brow ridge casts shadow over eyes'},
+  {id:'jawline',       label:'Jawline',       kr:'턱선',        su:'턱선 강조',        em:'〔〕',
+   prompt:'defined shadow along the jawline, jaw structure clearly delineated by shadow'},
+  {id:'cheekbone',     label:'Cheekbone',     kr:'광대뼈',      su:'광대 음영 강조',   em:'◇',
+   prompt:'cheekbone shadow accent, shadow beneath cheekbones emphasizing bone structure'},
+  {id:'nose_bridge',   label:'Nose Bridge',   kr:'코 브릿지',   su:'코 측면 그림자',   em:'▽',
+   prompt:'nose bridge shadow, shadow falling along the side of the nose'},
+];
+
+// 광원 존재 암시 (Light Presence)
+const LIGHT_PRESENCE = [
+  {id:'single',    label:'Single Source',   kr:'단일 광원',   su:'광원 1개 명시',    em:'💫',
+   prompt:'single dominant light source'},
+  {id:'daylight',  label:'Natural Daylight', kr:'자연 일광',  su:'자연광 암시',      em:'🌤️',
+   prompt:'natural daylight illumination'},
+  {id:'indoor',    label:'Indoor Soft',      kr:'실내 소프트', su:'부드러운 실내광',  em:'🏠',
+   prompt:'indoor soft illumination, ambient room light'},
+  {id:'cinematic', label:'Cinematic',        kr:'시네마틱',   su:'동기 부여된 조명', em:'🎬',
+   prompt:'cinematic motivated lighting'},
+];
+
+// Scene Light — 환경 앵커 (구체적 광원 종류)
+const SCENE_LIGHT_NATURAL = [
+  {id:'golden_hour_scene', label:'Golden Hour',   kr:'골든 아워',   su:'황혼 저각도 온기',  em:'🌅',
+   prompt:'golden hour ambient, warm low-angle sunlight flooding the scene, long soft shadows across the environment'},
+  {id:'harsh_sun',         label:'Harsh Sun',     kr:'강한 햇빛',   su:'직사광, 선명한 그림자', em:'☀️',
+   prompt:'harsh direct sunlight, strong overhead sun, sharp cast shadows, high ambient brightness'},
+  {id:'overcast',          label:'Overcast',      kr:'흐린 하늘',   su:'확산 자연광, 그림자 약함', em:'☁️',
+   prompt:'overcast sky, diffused natural light, soft even illumination, minimal cast shadows, muted tonal range'},
+  {id:'blue_hour',         label:'Blue Hour',     kr:'블루 아워',   su:'일몰 후 차가운 빛',  em:'🌆',
+   prompt:'blue hour ambient, cool twilight illumination, deep blue sky tone, soft fading natural light'},
+  {id:'night_sky',         label:'Night / Moon',  kr:'야간·달빛',   su:'저조도, 차가운 달빛', em:'🌙',
+   prompt:'nighttime ambient, cool moonlight, low overall luminance, deep shadows dominate the scene'},
+];
+const SCENE_LIGHT_ARTIFICIAL = [
+  {id:'window_scene',   label:'Window Light',   kr:'창문광',      su:'측면 대형 소프트', em:'🪟',
+   prompt:'window light from the side, large soft natural source, directional indoor illumination, shadows fall away from the window'},
+  {id:'ceiling_light',  label:'Ceiling Light',  kr:'천장 조명',   su:'균일 실내광',      em:'💡',
+   prompt:'ceiling-mounted indoor light, even overhead illumination, soft downward shadows, domestic ambient'},
+  {id:'street_lamp',    label:'Street Lamp',    kr:'가로등',      su:'고립된 풀 오브 라이트', em:'🏮',
+   prompt:'street lamp illumination, isolated warm pool of light, surrounding darkness, high contrast between lit and unlit areas'},
+  {id:'neon_scene',     label:'Neon Ambient',   kr:'네온 환경광', su:'채색 환경광, 사이버', em:'🌆',
+   prompt:'neon ambient light, colored atmospheric glow, vivid hues reflecting off surfaces, cyberpunk environmental lighting'},
+  {id:'candle_scene',   label:'Candlelight',    kr:'촛불 환경',   su:'따뜻한 중심 광원', em:'🕯️',
+   prompt:'candlelight ambient, intimate warm glow, low-key warm illumination, soft flickering light quality, deep surrounding shadows'},
+  {id:'studio_scene',   label:'Studio Flat',    kr:'스튜디오',    su:'중립 제어 환경',   em:'⬜',
+   prompt:'controlled studio lighting environment, neutral background illumination, clean even ambient'},
+];
+
+// 그림자 색온도
+const SHADOW_COLOR = [
+  {id:'neutral', label:'Neutral',  kr:'중립',     su:'무채색 그림자',  em:'⬜',
+   prompt:'neutral-toned shadows'},
+  {id:'cool',    label:'Cool',     kr:'쿨 섀도우', su:'청색 계열 그림자', em:'❄️',
+   prompt:'cool blue-tinted shadows, cinematic cool shadow'},
+  {id:'warm',    label:'Warm',     kr:'웜 섀도우', su:'황갈색 그림자',  em:'🟠',
+   prompt:'warm amber-tinted shadows, warm shadow tones'},
+  {id:'split',   label:'Split Tone', kr:'스플릿 톤', su:'하이라이트↔섀도우 색 대비', em:'🌗',
+   prompt:'split toning, warm highlights and cool shadows, complementary shadow tones'},
+];
+
+// 광원 감쇠 (Falloff)
+const LIGHT_FALLOFF = [
+  {id:'rapid',    label:'Rapid',    kr:'급격한',    su:'강한 depth감',  em:'📉',
+   prompt:'rapid light falloff, dramatic vignette, deep shadow periphery'},
+  {id:'gradual',  label:'Gradual',  kr:'완만한',    su:'자연스러운 감쇠', em:'📊',
+   prompt:'gradual light falloff, natural light transition'},
+  {id:'flat',     label:'No Falloff', kr:'감쇠 없음', su:'균일한 노출',   em:'▬',
+   prompt:'even light falloff, no vignetting, uniform exposure'},
+];
+
+// 피부 반사 특성 (Skin / Specular Response)
+const SKIN_RESPONSE = [
+  {id:'glossy',   label:'Glossy',   kr:'글로시',    su:'윤기·촉촉함',   em:'💧',
+   prompt:'glossy skin, specular highlights on skin, dewy complexion, shiny skin texture'},
+  {id:'satin',    label:'Satin',    kr:'새틴',      su:'K-뷰티 기본',   em:'✨',
+   prompt:'satin skin finish, soft specular, smooth skin luminosity, glass skin'},
+  {id:'matte',    label:'Matte',    kr:'매트',      su:'기름기 없는',   em:'🔲',
+   prompt:'matte skin, no specular highlights, powder-finish skin'},
+  {id:'textured', label:'Textured', kr:'텍스처',    su:'피부결 강조',   em:'🪨',
+   prompt:'visible skin texture, pores visible, detailed skin surface, raw realism'},
+];
+
+// 카메라 상태 → 조명 제약
+const CAM_CONSTRAINTS = {
+  // ── 카메라 높이 기반 ──
+  ground: {
+    recDir: ['front','front_45'],
+    recLightHeight: ['under','low'],
+    warnLightHeight: ['overhead'],
+    note: 'ground 앵글 → 언더라이트·로우 권장, 탑라이트 비권장',
+  },
+  overhead: {
+    recLightHeight: ['overhead','high'],
+    warnLightHeight: ['under'],
+    note: 'overhead 앵글 → 탑라이트 권장, 언더라이트 비권장',
+  },
+  eye: {
+    recLightHeight: ['eye','high'],
+    note: '아이 레벨 → 아이 레벨 조명 자연스러움',
+  },
+  // ── 카메라 방향 기반 ──
+  dir_front: {
+    recLightDir: ['front','front_45'],
+    recNamed: ['butterfly','clamshell','beauty_glam'],
+    note: '정면 → 버터플라이·클램쉘 등 전면 뷰티 조명 권장',
+  },
+  dir_side: {
+    recLightDir: ['side','front_45'],
+    recNamed: ['rembrandt','loop','split','broad','short'],
+    note: '측면 → Rembrandt·Split 등 측면 패턴 권장',
+  },
+  dir_rear: {
+    recLightDir: ['back','back_45'],
+    recRim: ['strong','hair'],
+    note: '후면 → 역광·림 라이트 필수. 전면광은 물리적으로 부자연스러움',
+    warnLightDir: ['front','front_45'],
+  },
+  dir_diagonal: {
+    recLightDir: ['front_45','side'],
+    recNamed: ['rembrandt','loop'],
+    note: '대각 → 45도 패턴(Rembrandt, Loop) 자연스러움',
+  },
+  // ── 카메라 틸트 기반 ──
+  tilt_up: {
+    recLightHeight: ['under','low'],
+    note: '상향 틸트 → 언더라이트·로우 조명 물리적으로 일치',
+  },
+  tilt_down: {
+    recLightHeight: ['overhead','high'],
+    note: '하향 틸트 → 탑라이트·하이 조명 물리적으로 일치',
+  },
+  tilt_level: {
+    recLightHeight: ['eye'],
+    note: '수평 → 아이레벨 조명 가장 자연스러움',
+  },
+};
+
+// ── Macro 프리셋 (스토리텔링 네이밍) ─────────────────────────────────────────
+const MACRO_PRESETS = [
+  {
+    id:'classic_3pt', em:'🎬', label:'The Classic', kr:'클래식',
+    sub:'3점 조명 · Key + Fill + Rim',
+    prompt:'three-point lighting setup, dominant key light, soft fill reducing shadow density, subtle rim separating subject from background, balanced professional illumination',
+  },
+  {
+    id:'villain',     em:'😈', label:'The Villain', kr:'빌런',
+    sub:'언더라이트 + 강한 그림자',
+    prompt:'underlighting, shadows cast upward across the face, harsh shadow boundaries, low key atmosphere, menacing unnatural light direction, deep inky shadows dominate',
+  },
+  {
+    id:'angel',       em:'😇', label:'The Angel', kr:'엔젤',
+    sub:'버터플라이 + 하이키 · 맑고 화사',
+    prompt:'butterfly lighting, overhead front soft glow, high key bright tones, minimal shadow presence, radiant glowing complexion, blooming highlights, heavenly soft illumination',
+  },
+  {
+    id:'silhouette_macro', em:'🌑', label:'The Silhouette', kr:'실루엣',
+    sub:'순수 역광 · 윤곽만 빛',
+    prompt:'pure backlight silhouette, subject in complete darkness, bright glowing rim outlining the figure, no fill light, strong contrast between subject and background',
+  },
+  {
+    id:'noir_detective', em:'🕵️', label:'The Noir', kr:'느와르',
+    sub:'베네치안 블라인드 · 필름 누아르',
+    prompt:'film noir lighting, venetian blind shadow pattern, harsh side light, deep inky blacks, high contrast chiaroscuro, cigarette smoke haze, dramatic shadow lines across face',
+  },
+  {
+    id:'golden_portrait', em:'🏆', label:'The Golden', kr:'골든',
+    sub:'골든아워 · 따뜻한 시네마틱',
+    prompt:'golden hour portrait lighting, warm amber backlight halo, soft front fill, skin bathed in golden glow, cinematic warmth, long gentle shadows',
+  },
+  {
+    id:'beauty_glam',    em:'💄', label:'The Glam', kr:'글램',
+    sub:'링 라이트 · 뷰티 글로우',
+    prompt:'ring light beauty lighting, centered circular catchlight, even soft frontal illumination, glossy skin highlight, glamour glow, catchlight visible in eyes',
+  },
+  {
+    id:'cyber_split',    em:'🤖', label:'The Cyber', kr:'사이버',
+    sub:'듀얼 네온 · 사이버펑크 분리',
+    prompt:'dual neon lighting, cyan light from one side magenta from the other, split complementary color illumination, hard colored shadows, cyberpunk atmosphere, vivid color separation across face',
+  },
+  {
+    id:'mystery',        em:'🌫️', label:'The Mystery', kr:'미스터리',
+    sub:'부분 조명 · 어둠 속 얼굴',
+    prompt:'partial face illumination, half the face obscured in deep shadow, only select features revealed by light, mysterious low key, shadow dominant, visible breath or haze',
+  },
+  {
+    id:'editorial',      em:'📸', label:'The Editorial', kr:'에디토리얼',
+    sub:'패션 에디토리얼 · 클린 하이콘트라스트',
+    prompt:'editorial fashion lighting, clean high contrast, sharp specular highlights, crisp shadow lines, fashion magazine quality, bold graphic light and shadow',
+  },
+];
+
+// ── 컬러 대비 레이어 ──────────────────────────────────────────────────────────
+const COLOR_CONTRAST = [
+  {id:'teal_orange',   em:'🎞️', label:'Teal & Orange',    kr:'틸&오렌지',
+   su:'영화적 대비의 정석',
+   prompt:'teal and orange color grading, warm orange skin tones contrasted with cool teal shadows, cinematic complementary color contrast'},
+  {id:'warm_cool',     em:'🌗', label:'Warm vs Cool',      kr:'웜 vs 쿨',
+   su:'웜 키 + 쿨 필 대비',
+   prompt:'warm key light and cool fill light, warm-cool color contrast, golden warm highlights against blue-tinted shadow side'},
+  {id:'cyber_neon',    em:'🌆', label:'Cyber Neon',        kr:'사이버 네온',
+   su:'마젠타 & 시안 교차',
+   prompt:'cyberpunk neon color contrast, magenta and cyan complementary neon lights, vivid color cast on skin, hard colored shadows'},
+  {id:'pink_purple',   em:'💜', label:'Pink & Purple',     kr:'핑크&퍼플',
+   su:'보라 계열 드림팝',
+   prompt:'pink and purple toned lighting, soft dreamy color cast, lavender shadows with rose highlights, ethereal color mood'},
+  {id:'gold_shadow',   em:'✨', label:'Gold & Shadow',     kr:'골드&섀도우',
+   su:'황금빛 + 차가운 그림자',
+   prompt:'golden warm highlights with deep cool shadows, rich gold tones on lit areas, desaturated cold shadow regions, luxurious contrast'},
+  {id:'monochrome',    em:'⬜', label:'Monochrome',        kr:'모노크롬',
+   su:'색온도 없음, 순수 명암',
+   prompt:'monochromatic lighting, desaturated tones, pure luminance contrast, no color cast, black and white quality lighting'},
+];
+const CAM_PROMPT_INJECT = {
+  ground:   'shadows cast upward across the face, lower areas appear more illuminated',
+  overhead: 'shadows fall downward beneath features, upper surfaces more exposed',
+  eye:      'natural eye-level perspective, balanced facial illumination',
+};
+
+// 카메라 프레임 → 조명 경고 + 프롬프트 보정
+const CAM_FRAME_CONSTRAINT = {
+  ecu: {
+    warn: 'ECU — 강한 Hard 광질은 피부 번짐(화이트 홀) 유발. Soft 권장.',
+    inject: 'soft diffused light, fine facial detail preserved, gentle tonal transitions',
+    conflictQuality: 'hard',
+  },
+  cu:  { warn: null, inject: null, conflictQuality: null },
+  ms:  { warn: null, inject: null, conflictQuality: null },
+  fs:  {
+    warn: 'Full Shot — 조명이 넓게 퍼져야 자연스러움. Global Illumination 고려.',
+    inject: 'broad ambient fill, light wrapping around full body, global illumination quality',
+    conflictQuality: null,
+  },
+  ws:  {
+    warn: 'Wide Shot — 환경광과 인물광의 통일성이 중요. Scene Light 설정 권장.',
+    inject: 'global illumination, wide scene ambient, cohesive environmental lighting',
+    conflictQuality: null,
+  },
+};
+
+// ── Scene ↔ Subject Constraint 테이블 ─────────────────────────────────────────
+// Scene Light ID → { conflictDirs, warnMsg, subjectPrefix, shadowHint }
+// conflictDirs: 물리적으로 충돌하는 주광원 방향 ID 목록
+// subjectPrefix: Subject Light 파트 앞에 붙는 보정 문구 (프롬프트 믹싱)
+// shadowHint: 그림자 방향 힌트 (buildPrompt 자동 삽입)
+const SCENE_SUBJECT_CONSTRAINT = {
+  // ── 자연광 ──
+  golden_hour_scene: {
+    conflictDirs: ['front'],
+    warnMsg: 'Golden Hour — 저각도 측면광. Front 방향과 충돌 가능. Side/Back 권장.',
+    subjectPrefix: 'soft golden reflected fill on face,',
+    shadowHint: 'long warm shadows cast to one side',
+  },
+  harsh_sun: {
+    conflictDirs: ['front', 'under'],
+    warnMsg: 'Harsh Sun — 강한 직사광. Front/Under 방향은 물리적으로 부자연스럽습니다.',
+    subjectPrefix: 'soft bounce fill offsetting harsh sunlight,',
+    shadowHint: 'sharp cast shadows, high contrast',
+  },
+  overcast: {
+    conflictDirs: [],
+    warnMsg: null,
+    subjectPrefix: 'subtle fill under overcast diffusion,',
+    shadowHint: 'minimal cast shadows, soft even shadow edges',
+  },
+  blue_hour: {
+    conflictDirs: ['overhead', 'under'],
+    warnMsg: 'Blue Hour — 수평 저각도 빛. Overhead/Under는 충돌 가능.',
+    subjectPrefix: 'cool blue ambient fill,',
+    shadowHint: 'long soft shadows in cool blue tones',
+  },
+  night_sky: {
+    conflictDirs: ['front', 'overhead'],
+    warnMsg: 'Night — 광원이 매우 약함. Front/Overhead 강한 광원과 충돌합니다.',
+    subjectPrefix: 'dim moonlit fill, low key subject light,',
+    shadowHint: 'deep shadows dominate, minimal highlight areas',
+  },
+  // ── 인공광 ──
+  window_scene: {
+    conflictDirs: ['back'],
+    warnMsg: 'Window Light — 측면 단방향광. Back 방향은 물리적으로 충돌합니다.',
+    subjectPrefix: 'soft window-reflected fill on shadow side,',
+    shadowHint: 'shadow falls away from the window side',
+  },
+  ceiling_light: {
+    conflictDirs: ['under'],
+    warnMsg: 'Ceiling Light — 하향광. Under 방향과 충돌합니다.',
+    subjectPrefix: 'even overhead fill from ceiling source,',
+    shadowHint: 'soft downward shadows, domestic ambient',
+  },
+  street_lamp: {
+    conflictDirs: ['front', 'back'],
+    warnMsg: 'Street Lamp — 국소 하향 풀 오브 라이트. Front/Back은 물리적으로 불자연스럽습니다.',
+    subjectPrefix: 'isolated warm pool of light on subject,',
+    shadowHint: 'strong falloff outside the light pool, surrounding darkness',
+  },
+  neon_scene: {
+    conflictDirs: [],
+    warnMsg: null,
+    subjectPrefix: 'neon color wash as fill on subject,',
+    shadowHint: 'colored shadows, vivid ambient light interaction',
+  },
+  candle_scene: {
+    conflictDirs: ['overhead', 'back'],
+    warnMsg: 'Candlelight — 낮은 중심 광원. Overhead/Back은 물리적으로 충돌합니다.',
+    subjectPrefix: 'warm candlelit fill on lower face,',
+    shadowHint: 'deep surrounding shadows, intimate warm falloff',
+  },
+  studio_scene: {
+    conflictDirs: [],
+    warnMsg: null,
+    subjectPrefix: 'controlled studio fill,',
+    shadowHint: null,
+  },
+};
+
+// ── Light Interaction Layer (간접광) ──────────────────────────────────────────
+const LIGHT_INTERACTION = [
+  {id:'bounce_ground', label:'Bounce Ground',  kr:'지면 반사',  su:'바닥 반사광, 자연스러운 아래 채움', em:'🪞',
+   prompt:'bounce light from ground, subtle upward fill from floor reflection'},
+  {id:'bounce_wall',   label:'Bounce Wall',    kr:'벽면 반사',  su:'측면 벽 반사, 환경 통일성',         em:'🧱',
+   prompt:'reflected light from wall, soft ambient fill from environment surfaces'},
+  {id:'ambient_fill',  label:'Ambient Fill',   kr:'환경 채움광', su:'공간 전체 확산, 그림자 리프트',    em:'🌫️',
+   prompt:'soft ambient fill light, environmental light wrapping around subject, shadow lift from surroundings'},
+  {id:'rim_environ',   label:'Env Rim',        kr:'환경 림',    su:'환경에서 오는 림 효과',              em:'🌐',
+   prompt:'environmental rim light, light from surroundings catching subject edges, motivated rim from scene'},
+  {id:'god_rays',      label:'God Rays',       kr:'고드레이',   su:'볼류메트릭 산란광',                  em:'☀️',
+   prompt:'volumetric god rays, light shafts cutting through atmosphere, cinematic light beams'},
+  {id:'subsurface',    label:'Subsurface',     kr:'피부 투과광', su:'피부 내부 산란, 반투명 느낌',       em:'🫧',
+   prompt:'subsurface scattering, light transmitting through skin, translucent skin quality, inner glow'},
+];
+
+// ── 상태 ──────────────────────────────────────────────────────────────────────
+const S = {
+  persons: 1,
+  named: null,
+  macro: null,
+  lightPresence: null,
+  sceneLight: null,
+  colorContrast: null,
+  lightInteraction: null,
+  dir: null, height: null, quality: null,
+  shadowSuggest: null, shadowDepth: null, shadowEdge: null,
+  shadowPattern: null,
+  shadowColor: null,
+  falloff: null,
+  skinResponse: null,
+  rim: null, ambient: null,
+  camHeight: null, camDir: null, camFrame: null,
+  camTilt: null, camPersons: null,
+  // 연동 소스 추적 — 'cam'이면 카메라에서 자동 주입, null이면 수동
+  _syncSource: { height: null, dir: null, frame: null, tilt: null, persons: null },
+  _shadowSuggestPrompt: '',
+};
+
+// ── 렌더 함수 ─────────────────────────────────────────────────────────────────
+
+function selectPersonsL(n) {
+  S.persons = S.persons === n ? 1 : n;
+  S._syncSource.persons = 'manual'; // 수동 변경 표시
+  if (S.named) {
+    const p = NAMED_PATTERNS.find(x => x.id === S.named);
+    if (p && p.multi && p.multi !== S.persons) S.named = null;
+  }
+  update();
+}
+
+function renderPersonsL() {
+  [1,2,3].forEach(n => {
+    const el = document.getElementById(`lpb${n}`);
+    if (!el) return;
+    const isActive = S.persons === n;
+    el.classList.toggle('sel', isActive);
+    // 카메라 연동 배지
+    const syncBadge = el.querySelector('.persons-sync-badge');
+    const isSynced = S.camPersons === n && S._syncSource.persons === 'cam';
+    if (syncBadge) {
+      syncBadge.style.display = isSynced ? '' : 'none';
+    } else if (isSynced) {
+      const badge = document.createElement('span');
+      badge.className = 'persons-sync-badge';
+      badge.style.cssText = 'position:absolute;top:2px;right:3px;font-size:7px;color:var(--cyn)';
+      badge.textContent = '📡';
+      el.style.position = 'relative';
+      el.appendChild(badge);
+    }
+  });
+  document.getElementById('multiNote').style.display = S.persons === 3 ? '' : 'none';
+}
+
+function renderNamed() {
+  // 인원 버튼 상태
+  [1,2,3].forEach(n => {
+    const el = document.getElementById(`lpb${n}`);
+    if (el) el.classList.toggle('sel', S.persons === n);
+  });
+  document.getElementById('multiNote').style.display = S.persons === 3 ? '' : 'none';
+
+  // 패턴 필터: 2인 전용은 persons===2일 때만 표시, 일반은 항상 표시
+  const visible = NAMED_PATTERNS.filter(p => !p.multi || p.multi === S.persons);
+
+  // 2인 섹션 구분선
+  const has2 = S.persons === 2;
+  let html = '';
+  const general = visible.filter(p => !p.multi);
+  const multi2  = visible.filter(p => p.multi === 2);
+
+  html += general.map(p => namedBtnHTML(p)).join('');
+  if (has2 && multi2.length) {
+    html += `<div style="grid-column:1/-1;margin:6px 0 2px;font-size:9px;font-weight:700;color:var(--acc2);text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:6px">
+      2인 전용 패턴<span style="flex:1;height:1px;background:var(--b1);display:inline-block"></span></div>`;
+    html += multi2.map(p => namedBtnHTML(p)).join('');
+  }
+  document.getElementById('namedGrid').innerHTML = html;
+}
+
+function namedBtnHTML(p) {
+  const sel = S.named === p.id;
+  return `<div class="named-btn${sel?' sel':''}" onclick="selectNamed('${p.id}')">
+    ${p.dual ? '<span class="nb-dual">2광원</span>' : ''}
+    ${p.multi ? `<span class="nb-dual" style="right:auto;left:5px;color:var(--acc2)">👥${p.multi}인</span>` : ''}
+    <span class="nb-em">${p.em}</span>
+    <span class="nb-la">${p.label}</span>
+    <span class="nb-sub">${p.sub}</span>
+  </div>`;
+}
+
+function renderDir() {
+  const g = document.getElementById('dirGrid');
+  if (!g) return;
+
+  // Scene Light 충돌 방향
+  const sc = S.sceneLight ? SCENE_SUBJECT_CONSTRAINT[S.sceneLight] : null;
+  const conflictDirs = sc ? (sc.conflictDirs || []) : [];
+
+  // 카메라 방향 연동 권장/비권장
+  const camDirKey = S.camDir && S._syncSource.dir === 'cam' ? 'dir_' + S.camDir : null;
+  const dc = camDirKey ? CAM_CONSTRAINTS[camDirKey] : null;
+  const recLightDirs  = dc ? (dc.recLightDir  || []) : [];
+  const warnLightDirs = dc ? (dc.warnLightDir || []) : [];
+
+  g.innerHTML = LIGHT_DIR.map(d => {
+    const sel        = S.dir === d.id;
+    const isConflict = conflictDirs.includes(d.id);
+    const isRec      = recLightDirs.includes(d.id);
+    const isWarn     = warnLightDirs.includes(d.id);
+
+    let tags = '';
+    let st   = isConflict ? 'opacity:0.35;' : '';
+    let border = '';
+    if (isConflict) tags += `<span style="position:absolute;top:2px;right:3px;font-size:8px;color:var(--red)">⚡</span>`;
+    if (isRec && !sel)  { tags += `<span class="ctag tag-ok" style="position:absolute;top:2px;left:2px;font-size:7px">📡 권장</span>`; border = 'border-color:rgba(125,207,255,.5);'; }
+    if (isWarn && !sel) tags += `<span class="ctag tag-warn" style="position:absolute;top:2px;right:2px;font-size:7px">⚠ 주의</span>`;
+
+    return `<div class="btn${sel?' sel':''}" style="position:relative;${st}${border}" onclick="selectDir('${d.id}')">
+      ${tags}
+      <span class="em">${d.em}</span>
+      <span class="la">${d.label}</span>
+      <span class="su">${d.kr}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderHeight() {
+  const g = document.getElementById('heightGrid');
+  if (!g) return;
+
+  // 카메라 높이 + 틸트 합산 권장/비권장
+  const heightRec  = new Set();
+  const heightWarn = new Set();
+
+  if (S.camHeight && S._syncSource.height === 'cam') {
+    const c = CAM_CONSTRAINTS[S.camHeight];
+    if (c) {
+      (c.recLightHeight  || []).forEach(x => heightRec.add(x));
+      (c.warnLightHeight || []).forEach(x => heightWarn.add(x));
+    }
+  }
+  if (S.camTilt && S._syncSource.tilt === 'cam') {
+    const tc = CAM_CONSTRAINTS['tilt_' + S.camTilt];
+    if (tc) {
+      (tc.recLightHeight  || []).forEach(x => heightRec.add(x));
+      (tc.warnLightHeight || []).forEach(x => heightWarn.add(x));
+    }
+  }
+
+  g.innerHTML = LIGHT_HEIGHT.map(h => {
+    const sel    = S.height === h.id;
+    const isRec  = heightRec.has(h.id);
+    const isWarn = heightWarn.has(h.id);
+
+    let tag = '';
+    let border = '';
+    if (isRec  && !sel) { tag = `<span class="ctag tag-ok">📡 권장</span>`;  border = 'border-color:rgba(125,207,255,.5);'; }
+    if (isWarn && !sel)   tag = `<span class="ctag tag-warn">⚠ 비권장</span>`;
+
+    return `<div class="btn${sel?' sel':''}" style="${border}" onclick="selectHeight('${h.id}')">
+      ${tag}
+      <span class="em">${h.em}</span>
+      <span class="la">${h.label}</span>
+      <span class="su">${h.kr}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderQuality() {
+  document.getElementById('qualityRow').innerHTML = LIGHT_QUALITY.map(q => {
+    const sel = S.quality === q.id;
+    return `<div class="slider-btn${sel?' sel':''}" onclick="selectQuality('${q.id}')">
+      <span class="sl-la">${q.label}</span>
+      <span class="sl-su">${q.su}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderShadowSuggest() {
+  const box = document.getElementById('shadowSuggest');
+  const chips = document.getElementById('shadowSuggestChips');
+  const suggestions = S.dir ? (SHADOW_SUGGEST[S.dir] || []) : [];
+  if (!suggestions.length) { box.style.display='none'; return; }
+  box.style.display='block';
+  chips.innerHTML = suggestions.map((s,i) => {
+    const key = `suggest_${i}`;
+    const sel = S.shadowSuggest === key;
+    return `<span class="s-chip c-auto${sel?' sel':''}" onclick="selectShadowSuggest('${key}','${escQ(s.prompt)}')">
+      ${LANG==='kr' ? s.kr : s.label}
+    </span>`;
+  }).join('');
+}
+
+function renderShadowDepth() {
+  document.getElementById('shadowDepthRow').innerHTML = SHADOW_DEPTH.map(d => {
+    const sel = S.shadowDepth === d.id;
+    return `<div class="slider-btn${sel?' sel':''}" onclick="selectShadowDepth('${d.id}')">
+      <span class="sl-la">${LANG==='kr'?d.kr:d.label}</span>
+      <span class="sl-su">${d.su}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderShadowEdge() {
+  document.getElementById('shadowEdgeRow').innerHTML = SHADOW_EDGE.map(e => {
+    const sel = S.shadowEdge === e.id;
+    return `<div class="slider-btn${sel?' sel':''}" onclick="selectShadowEdge('${e.id}')">
+      <span class="sl-la">${LANG==='kr'?e.kr:e.label}</span>
+      <span class="sl-su">${e.su}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderRim() {
+  document.getElementById('rimGrid').innerHTML = RIM_EFFECT.map(r => {
+    const sel = S.rim === r.id;
+    return `<div class="btn${sel?' sel':''}" onclick="selectRim('${r.id}')">
+      <span class="em">${r.em}</span>
+      <span class="la">${r.label}</span>
+    </div>`;
+  }).join('');
+  // 림 색온도 (colored 선택 시 표시)
+  const showColor = S.rim && !['none','subtle','strong','hair','separation','kicker','fill'].includes(S.rim);
+  document.getElementById('rimColorLabel').style.display = showColor ? 'flex' : 'none';
+}
+
+function renderLightInteraction() {
+  document.getElementById('lightInteractionGrid').innerHTML = LIGHT_INTERACTION.map(li => {
+    const sel = S.lightInteraction === li.id;
+    return `<div class="btn${sel?' sel':''}" onclick="selectLightInteraction('${li.id}')">
+      <span class="em">${li.em}</span>
+      <span class="la">${LANG==='kr' ? li.kr : li.label}</span>
+      <span class="su">${li.su}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderMacro() {
+  document.getElementById('macroGrid').innerHTML = MACRO_PRESETS.map(m => {
+    const sel = S.macro === m.id;
+    return `<div class="named-btn${sel?' sel':''}" onclick="selectMacro('${m.id}')">
+      <span class="ne">${m.em}</span>
+      <span class="nl">${LANG==='kr' ? m.kr : m.label}</span>
+      <span class="ns">${m.sub}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderColorContrast() {
+  document.getElementById('colorContrastGrid').innerHTML = COLOR_CONTRAST.map(c => {
+    const sel = S.colorContrast === c.id;
+    return `<div class="btn${sel?' sel':''}" onclick="selectColorContrast('${c.id}')">
+      <span class="em">${c.em}</span>
+      <span class="la">${LANG==='kr' ? c.kr : c.label}</span>
+      <span class="su">${c.su}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderSceneLight() {
+  const makeBtn = (item) => {
+    const sel = S.sceneLight === item.id;
+    return `<div class="btn${sel?' sel':''}" onclick="selectSceneLight('${item.id}')">
+      <span class="em">${item.em}</span>
+      <span class="la">${item.label}</span>
+      <span class="su">${item.su}</span>
+    </div>`;
+  };
+  document.getElementById('sceneLightNaturalGrid').innerHTML    = SCENE_LIGHT_NATURAL.map(makeBtn).join('');
+  document.getElementById('sceneLightArtificialGrid').innerHTML = SCENE_LIGHT_ARTIFICIAL.map(makeBtn).join('');
+}
+
+function renderPresence() {
+  document.getElementById('presenceRow').innerHTML = LIGHT_PRESENCE.map(p => {
+    const sel = S.lightPresence === p.id;
+    return `<div class="slider-btn${sel?' sel':''}" onclick="selectPresence('${p.id}')">
+      <span class="sl-la">${p.em} ${LANG==='kr'?p.kr:p.label}</span>
+      <span class="sl-su">${p.su}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderShadowPattern() {
+  document.getElementById('shadowPatternGrid').innerHTML = SHADOW_PATTERN.map(p => {
+    const sel = S.shadowPattern === p.id;
+    return `<div class="btn${sel?' sel':''}" onclick="selectShadowPattern('${p.id}')">
+      <span class="em">${p.em}</span>
+      <span class="la">${LANG==='kr'?p.kr:p.label}</span>
+      <span class="su">${p.su}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderShadowColor() {
+  document.getElementById('shadowColorRow').innerHTML = SHADOW_COLOR.map(c => {
+    const sel = S.shadowColor === c.id;
+    return `<div class="slider-btn${sel?' sel':''}" onclick="selectShadowColor('${c.id}')">
+      <span class="sl-la">${c.em} ${LANG==='kr'?c.kr:c.label}</span>
+      <span class="sl-su">${c.su}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderFalloff() {
+  document.getElementById('falloffRow').innerHTML = LIGHT_FALLOFF.map(f => {
+    const sel = S.falloff === f.id;
+    return `<div class="slider-btn${sel?' sel':''}" onclick="selectFalloff('${f.id}')">
+      <span class="sl-la">${f.em} ${LANG==='kr'?f.kr:f.label}</span>
+      <span class="sl-su">${f.su}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderSkin() {
+  document.getElementById('skinGrid').innerHTML = SKIN_RESPONSE.map(s => {
+    const sel = S.skinResponse === s.id;
+    return `<div class="btn${sel?' sel':''}" onclick="selectSkin('${s.id}')">
+      <span class="em">${s.em}</span>
+      <span class="la">${LANG==='kr'?s.kr:s.label}</span>
+      <span class="su">${s.su}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderAmbient() {
+  document.getElementById('ambientGrid').innerHTML = AMBIENT.map(a => {
+    const sel = S.ambient === a.id;
+    return `<div class="btn${sel?' sel':''}" onclick="selectAmbient('${a.id}')">
+      <span class="em">${a.em}</span>
+      <span class="la">${LANG==='kr'?a.kr:a.label}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── 선택 이벤트 ───────────────────────────────────────────────────────────────
+
+function selectNamed(id) {
+  if (S.named === id) { S.named = null; }
+  else {
+    S.named = id;
+    S.macro = null; // macro 초기화
+    S.dir = S.height = S.quality = null;
+    S.shadowSuggest = S.shadowDepth = S.shadowEdge = null;
+    S.rim = S.ambient = null;
+  }
+  update();
+}
+
+function selectDir(id) {
+  S.named = null;
+  S.macro = null; // macro 초기화
+  S.dir = S.dir === id ? null : id;
+  S.shadowSuggest = null; // 방향 바뀌면 제안 초기화
+  update();
+}
+
+function selectHeight(id)  { S.height  = S.height  === id ? null : id; update(); }
+function selectQuality(id) { S.quality = S.quality === id ? null : id; update(); }
+
+function selectShadowSuggest(key, prompt) {
+  S.shadowSuggest = S.shadowSuggest === key ? null : key;
+  S._shadowSuggestPrompt = S.shadowSuggest ? prompt : '';
+  update();
+}
+
+function selectLightInteraction(id) { S.lightInteraction = S.lightInteraction === id ? null : id; update(); }
+function selectMacro(id) {
+  S.macro = S.macro === id ? null : id;
+  // Macro 선택 시 named/physical 초기화
+  if (S.macro) { S.named = null; S.dir = null; S.height = null; S.quality = null; }
+  update();
+}
+function selectColorContrast(id) { S.colorContrast = S.colorContrast === id ? null : id; update(); }
+function selectSceneLight(id)    { S.sceneLight    = S.sceneLight    === id ? null : id; update(); }
+function selectPresence(id)      { S.lightPresence  = S.lightPresence  === id ? null : id; update(); }
+function selectShadowPattern(id) { S.shadowPattern  = S.shadowPattern  === id ? null : id; update(); }
+function selectShadowColor(id)   { S.shadowColor    = S.shadowColor    === id ? null : id; update(); }
+function selectFalloff(id)     { S.falloff      = S.falloff      === id ? null : id; update(); }
+function selectSkin(id)        { S.skinResponse = S.skinResponse === id ? null : id; update(); }
+
+function selectShadowDepth(id) { S.shadowDepth = S.shadowDepth === id ? null : id; update(); }
+function selectShadowEdge(id)  { S.shadowEdge  = S.shadowEdge  === id ? null : id; update(); }
+function selectRim(id)         { S.rim         = S.rim         === id ? null : id; update(); }
+function selectAmbient(id)     { S.ambient     = S.ambient     === id ? null : id; update(); }
+
+function resetAll() {
+  Object.keys(S).forEach(k => { S[k] = null; });
+  S._shadowSuggestPrompt = '';
+  update();
+}
+
+// ── 패널 잠금 ─────────────────────────────────────────────────────────────────
+
+function hasLight() {
+  return S.macro || S.named || S.dir || S.height || S.quality;
+}
+
+function update() {
+  const hasMain = hasLight();
+  document.getElementById('pShadow').classList.toggle('locked', !hasMain);
+  document.getElementById('pRim').classList.toggle('locked', !hasMain);
+  document.getElementById('pAmbient').classList.toggle('locked', !hasMain);
+  document.getElementById('pAdvanced').classList.toggle('locked', !hasMain);
+
+  renderMacro();
+  renderNamed();
+  renderPersonsL();
+  renderSceneLight();
+  renderPresence();
+  renderDir();
+  renderHeight();
+  renderQuality();
+  renderShadowSuggest();
+  renderShadowDepth();
+  renderShadowEdge();
+  renderShadowColor();
+  renderShadowPattern();
+  renderFalloff();
+  renderColorContrast();
+  renderSkin();
+  renderRim();
+  renderAmbient();
+  renderLightInteraction();
+
+  // Silhouette Constraint
+  const isSilhouette = S.ambient === 'lowkey' || S.named === 'rim_only' || S.named === 'silhouette_pair' || S.macro === 'silhouette_macro';
+  const sw = document.getElementById('silhouetteWarning');
+  if (sw) sw.style.display = isSilhouette ? '' : 'none';
+  const fillBtn = document.querySelector('[onclick="selectRim(\'fill\')"]');
+  if (fillBtn) fillBtn.style.opacity = isSilhouette ? '0.35' : '1';
+
+  // Scene ↔ Subject Constraint 경고
+  const ssWarn    = document.getElementById('sceneSubjectWarn');
+  const ssWarnTxt = document.getElementById('sceneSubjectWarnText');
+  if (ssWarn && ssWarnTxt) {
+    const sc = S.sceneLight ? SCENE_SUBJECT_CONSTRAINT[S.sceneLight] : null;
+    const dirConflict = sc && S.dir && sc.conflictDirs.includes(S.dir);
+    const sceneWarnMsg = sc && sc.warnMsg;
+    if (dirConflict) {
+      ssWarn.style.display = '';
+      ssWarnTxt.textContent = sc.warnMsg || '주광원 방향이 Scene Light와 충돌합니다.';
+    } else if (sceneWarnMsg && !S.dir) {
+      // Scene만 선택됐을 때도 권장 힌트 표시
+      ssWarn.style.display = '';
+      ssWarn.style.background = 'rgba(122,162,247,.07)';
+      ssWarn.style.borderColor = 'rgba(122,162,247,.25)';
+      ssWarn.style.color = 'var(--cyn)';
+      ssWarnTxt.textContent = sc.warnMsg;
+    } else {
+      ssWarn.style.display = 'none';
+      ssWarn.style.background = '';
+      ssWarn.style.borderColor = '';
+      ssWarn.style.color = '';
+    }
+  }
+
+  // Frame Constraint 경고
+  const fwBar  = document.getElementById('frameWarnBar');
+  const fwText = document.getElementById('frameWarnText');
+  if (fwBar && fwText) {
+    const fc = S.camFrame ? CAM_FRAME_CONSTRAINT[S.camFrame] : null;
+    const fwMsg = fc && fc.warn ? fc.warn : null;
+    const ecuHardConflict = S.camFrame === 'ecu' && S.quality === 'hard';
+    if (ecuHardConflict) {
+      fwBar.style.display = '';
+      fwText.textContent = 'ECU + Hard 광질 충돌 — 피부 번짐 위험. Soft 또는 Mixed로 변경을 권장합니다.';
+    } else if (fwMsg) {
+      fwBar.style.display = '';
+      fwText.textContent = fwMsg;
+    } else {
+      fwBar.style.display = 'none';
+    }
+  }
+
+  // 인원 버튼 동기화 (카메라 연동 시)
+  if (S.camPersons && S._syncSource.persons === 'cam') {
+    renderPersonsL();
+  }
+
+  // 방향/틸트 연동 힌트 갱신
+  renderDirSyncHint();
+
+  updateFlow();
+  updatePrompt();
+}
+
+function updateFlow() {
+  const steps = [
+    {el:'fs1', done: hasLight()},
+    {el:'fs2', done: !!(S.shadowDepth || S.shadowEdge || S.shadowSuggest)},
+    {el:'fs3', done: !!S.rim},
+    {el:'fs4', done: !!S.ambient},
+  ];
+  steps.forEach((s,i) => {
+    const el = document.getElementById(s.el);
+    if (!el) return;
+    el.classList.toggle('done', s.done);
+    el.classList.toggle('active', !s.done && (i===0 || steps[i-1].done));
+  });
+}
+
+// ── Phenomenon Summary 자동 생성 ──────────────────────────────────────────────
+// dir + height + quality 조합 → 보이는 결과 요약 문장 1줄 자동 생성
+function buildPhenomenonSummary() {
+  if (!S.dir && !S.height && !S.quality) return null;
+
+  const parts = [];
+
+  // 방향 기반 밝기 분포
+  const dirPhenomenon = {
+    front:      'even brightness across the face',
+    front_45:   'one side of the face slightly more illuminated than the other',
+    side:       'one side of the face strongly illuminated, brightness falls off sharply across the face',
+    back_45:    'edges of the subject catch light while the front remains in shadow',
+    back:       'subject silhouetted with bright glow outlining the edges',
+  };
+  if (S.dir && dirPhenomenon[S.dir]) parts.push(dirPhenomenon[S.dir]);
+
+  // 높이 기반 그림자 방향
+  const heightPhenomenon = {
+    overhead: 'shadows forming beneath facial features',
+    high:     'shadows fall slightly downward across features',
+    eye:      null,
+    low:      'shadows cast slightly upward across features',
+    under:    'shadows cast upward across the face',
+  };
+  if (S.height && heightPhenomenon[S.height]) parts.push(heightPhenomenon[S.height]);
+
+  // 성질 기반 경계
+  const qualityPhenomenon = {
+    hard:  'sharp shadow boundaries',
+    mixed: null,
+    soft:  'smooth tonal transitions across the face',
+  };
+  if (S.quality && qualityPhenomenon[S.quality]) parts.push(qualityPhenomenon[S.quality]);
+
+  return parts.length ? parts.join(', ') : null;
+}
+
+// ── 프롬프트 조립 ─────────────────────────────────────────────────────────────
+
+function buildPrompt() {
+  const parts = [];
+
+  // Scene Constraint 로드 (프롬프트 믹싱에 사용)
+  const sc = S.sceneLight ? SCENE_SUBJECT_CONSTRAINT[S.sceneLight] : null;
+
+  // ── [0] 환경 톤
+  if (S.ambient) {
+    const a = AMBIENT.find(x => x.id === S.ambient);
+    if (a) parts.push(a.prompt);
+  }
+
+  // ── [0.5] Scene Light 환경 앵커 (월드 기준 — 항상 우선)
+  if (S.sceneLight) {
+    const all = [...SCENE_LIGHT_NATURAL, ...SCENE_LIGHT_ARTIFICIAL];
+    const sl = all.find(x => x.id === S.sceneLight);
+    if (sl) parts.push(sl.prompt);
+    // Scene의 그림자 힌트 자동 삽입
+    if (sc && sc.shadowHint) parts.push(sc.shadowHint);
+  }
+
+  if (S.macro) {
+    // ── Macro 프리셋
+    const m = MACRO_PRESETS.find(x => x.id === S.macro);
+    if (m) parts.push(m.prompt);
+
+  } else if (S.named) {
+    // ── Named 패턴 (Scene prefix 붙이기)
+    if (sc && sc.subjectPrefix) parts.push(sc.subjectPrefix);
+    const p = NAMED_PATTERNS.find(x => x.id === S.named);
+    if (p) parts.push(p.prompt);
+
+  } else {
+    // ── Physical 조합 (카메라 기준 Subject Light)
+    if (S.lightPresence) {
+      const lp = LIGHT_PRESENCE.find(x => x.id === S.lightPresence);
+      if (lp) parts.push(lp.prompt);
+    }
+
+    const dir = S.dir ? LIGHT_DIR.find(x => x.id === S.dir) : null;
+    const ht  = S.height ? LIGHT_HEIGHT.find(x => x.id === S.height) : null;
+    const q   = S.quality ? LIGHT_QUALITY.find(x => x.id === S.quality) : null;
+
+    // Scene이 있을 때 Subject Light 앞에 보정 prefix 삽입 (프롬프트 믹싱 핵심)
+    if (sc && sc.subjectPrefix && (dir || ht || q)) {
+      parts.push(sc.subjectPrefix);
+    }
+
+    if (q && dir && ht) {
+      parts.push(`${q.prompt}, ${dir.prompt}, ${ht.prompt}`);
+    } else {
+      if (q)   parts.push(q.prompt);
+      if (dir) parts.push(dir.prompt);
+      if (ht)  parts.push(ht.prompt);
+    }
+
+    // Phenomenon Summary
+    const phenom = buildPhenomenonSummary();
+    if (phenom) parts.push(phenom);
+
+    // 카메라 높이 보정
+    if (S.camHeight && CAM_PROMPT_INJECT[S.camHeight]) {
+      parts.push(CAM_PROMPT_INJECT[S.camHeight]);
+    }
+  }
+
+  // ── 카메라 프레임 보정
+  if (S.camFrame && CAM_FRAME_CONSTRAINT[S.camFrame]) {
+    const fc = CAM_FRAME_CONSTRAINT[S.camFrame];
+    if (fc.inject) parts.push(fc.inject);
+  }
+
+  // ── 그림자
+  if (S.shadowSuggest && S._shadowSuggestPrompt) parts.push(S._shadowSuggestPrompt);
+  if (S.shadowDepth) {
+    const d = SHADOW_DEPTH.find(x => x.id === S.shadowDepth);
+    if (d && d.prompt) parts.push(d.prompt);
+  }
+  if (S.shadowEdge) {
+    const e = SHADOW_EDGE.find(x => x.id === S.shadowEdge);
+    if (e && e.prompt) parts.push(e.prompt);
+  }
+  if (S.shadowPattern) {
+    const sp = SHADOW_PATTERN.find(x => x.id === S.shadowPattern);
+    if (sp && sp.prompt) parts.push(sp.prompt);
+  }
+
+  // ── 윤곽 분리
+  if (S.rim && S.rim !== 'none') {
+    const r = RIM_EFFECT.find(x => x.id === S.rim);
+    if (r && r.prompt) parts.push(r.prompt);
+  }
+
+  // ── 그림자 색온도
+  if (S.shadowColor) {
+    const c = SHADOW_COLOR.find(x => x.id === S.shadowColor);
+    if (c && c.prompt) parts.push(c.prompt);
+  }
+
+  // ── Falloff
+  if (S.falloff) {
+    const f = LIGHT_FALLOFF.find(x => x.id === S.falloff);
+    if (f && f.prompt) parts.push(f.prompt);
+  }
+
+  // ── Skin Response
+  if (S.skinResponse) {
+    const sk = SKIN_RESPONSE.find(x => x.id === S.skinResponse);
+    if (sk && sk.prompt) parts.push(sk.prompt);
+  }
+
+  // ── Color Contrast
+  if (S.colorContrast) {
+    const cc = COLOR_CONTRAST.find(x => x.id === S.colorContrast);
+    if (cc && cc.prompt) parts.push(cc.prompt);
+  }
+
+  // ── Light Interaction (간접광 — 맨 마지막: Scene+Subject 물리 연결)
+  if (S.lightInteraction) {
+    const li = LIGHT_INTERACTION.find(x => x.id === S.lightInteraction);
+    if (li && li.prompt) parts.push(li.prompt);
+  }
+
+  return parts.join(', ');
+}
+
+function buildDisplay() {
+  if (LANG === 'en') return buildPrompt();
+  const parts = [];
+
+  if (S.macro) {
+    const m = MACRO_PRESETS.find(x => x.id === S.macro);
+    if (m) parts.push(m.kr + ' 프리셋');
+  } else if (S.named) {
+    const p = NAMED_PATTERNS.find(x => x.id === S.named);
+    if (p) parts.push(p.kr + ' 조명');
+  } else {
+    if (S.sceneLight) {
+      const all = [...SCENE_LIGHT_NATURAL, ...SCENE_LIGHT_ARTIFICIAL];
+      const sl = all.find(x => x.id === S.sceneLight);
+      if (sl) parts.push(sl.kr);
+    }
+    if (S.lightPresence) {
+      const lp = LIGHT_PRESENCE.find(x => x.id === S.lightPresence);
+      if (lp) parts.push(lp.kr);
+    }
+    const dir = S.dir ? LIGHT_DIR.find(x => x.id === S.dir) : null;
+    const ht  = S.height ? LIGHT_HEIGHT.find(x => x.id === S.height) : null;
+    const q   = S.quality ? LIGHT_QUALITY.find(x => x.id === S.quality) : null;
+    if (q)   parts.push(q.kr);
+    if (dir) parts.push(dir.kr + ' 방향');
+    if (ht)  parts.push(ht.kr);
+  }
+
+  if (S.shadowDepth) {
+    const d = SHADOW_DEPTH.find(x => x.id === S.shadowDepth);
+    if (d && d.prompt) parts.push(d.kr + ' 그림자');
+  }
+  if (S.shadowEdge) {
+    const e = SHADOW_EDGE.find(x => x.id === S.shadowEdge);
+    if (e) parts.push(e.kr);
+  }
+  if (S.shadowPattern) {
+    const sp = SHADOW_PATTERN.find(x => x.id === S.shadowPattern);
+    if (sp) parts.push(sp.kr + ' 그림자');
+  }
+  if (S.rim && S.rim !== 'none') {
+    const r = RIM_EFFECT.find(x => x.id === S.rim);
+    if (r) parts.push(r.label);
+  }
+  if (S.ambient) {
+    const a = AMBIENT.find(x => x.id === S.ambient);
+    if (a) parts.push(a.kr);
+  }
+  if (S.shadowColor) {
+    const c = SHADOW_COLOR.find(x => x.id === S.shadowColor);
+    if (c) parts.push(c.kr + ' 섀도우');
+  }
+  if (S.falloff) {
+    const f = LIGHT_FALLOFF.find(x => x.id === S.falloff);
+    if (f) parts.push(f.kr + ' 감쇠');
+  }
+  if (S.skinResponse) {
+    const sk = SKIN_RESPONSE.find(x => x.id === S.skinResponse);
+    if (sk) parts.push(sk.kr + ' 피부');
+  }
+
+  return parts.join(', ');
+}
+
+function updatePrompt() {
+  const raw  = buildPrompt();
+  const out  = document.getElementById('promptOut');
+  const tags = document.getElementById('selTags');
+
+  if (raw) {
+    out.classList.remove('empty');
+    out.textContent = LANG === 'kr' ? buildDisplay() : raw;
+  } else {
+    out.classList.add('empty');
+    out.textContent = '주광원 또는 고유명사 패턴을 선택해 주세요.';
+  }
+
+  // 선택 태그
+  const tagItems = [];
+  if (S.macro) {
+    const m = MACRO_PRESETS.find(x => x.id === S.macro);
+    if (m) tagItems.push(`⚡ ${m.label}`);
+  } else if (S.named) {
+    const p = NAMED_PATTERNS.find(x => x.id === S.named);
+    if (p) tagItems.push(`★ ${p.label}`);
+  } else {
+    if (S.dir)     { const d = LIGHT_DIR.find(x=>x.id===S.dir); if(d) tagItems.push(d.label); }
+    if (S.height)  { const h = LIGHT_HEIGHT.find(x=>x.id===S.height); if(h) tagItems.push(h.label); }
+    if (S.quality) { const q = LIGHT_QUALITY.find(x=>x.id===S.quality); if(q) tagItems.push(q.label); }
+  }
+  if (S.sceneLight) {
+    const all = [...SCENE_LIGHT_NATURAL, ...SCENE_LIGHT_ARTIFICIAL];
+    const sl = all.find(x=>x.id===S.sceneLight);
+    if (sl) tagItems.push(`Scene:${sl.label}`);
+  }
+  if (S.shadowDepth) { const d = SHADOW_DEPTH.find(x=>x.id===S.shadowDepth); if(d) tagItems.push(`Shadow:${d.label}`); }
+  if (S.shadowEdge)  { const e = SHADOW_EDGE.find(x=>x.id===S.shadowEdge);   if(e) tagItems.push(e.label); }
+  if (S.shadowPattern) { const sp = SHADOW_PATTERN.find(x=>x.id===S.shadowPattern); if(sp) tagItems.push(`Pattern:${sp.label}`); }
+  if (S.rim && S.rim !== 'none') { const r = RIM_EFFECT.find(x=>x.id===S.rim); if(r) tagItems.push(r.label); }
+  if (S.ambient) { const a = AMBIENT.find(x=>x.id===S.ambient); if(a) tagItems.push(a.label); }
+  if (S.lightPresence) { const lp = LIGHT_PRESENCE.find(x=>x.id===S.lightPresence); if(lp) tagItems.push(`Pres:${lp.label}`); }
+  if (S.shadowColor) { const c = SHADOW_COLOR.find(x=>x.id===S.shadowColor); if(c) tagItems.push(`Shadow:${c.label}`); }
+  if (S.falloff) { const f = LIGHT_FALLOFF.find(x=>x.id===S.falloff); if(f) tagItems.push(`Falloff:${f.label}`); }
+  if (S.skinResponse) { const sk = SKIN_RESPONSE.find(x=>x.id===S.skinResponse); if(sk) tagItems.push(`Skin:${sk.label}`); }
+  if (S.colorContrast) { const cc = COLOR_CONTRAST.find(x=>x.id===S.colorContrast); if(cc) tagItems.push(`Color:${cc.label}`); }
+  if (S.lightInteraction) { const li = LIGHT_INTERACTION.find(x=>x.id===S.lightInteraction); if(li) tagItems.push(`Interact:${li.label}`); }
+
+  tags.innerHTML = tagItems.map(t => `<span class="sel-tag">${t}</span>`).join('');
+}
+
+function copyPrompt() {
+  const raw = buildPrompt();
+  if (!raw) return;
+  navigator.clipboard.writeText(raw).then(() => {
+    const b = document.getElementById('copyBtn');
+    b.textContent = '✅ 복사됨!';
+    setTimeout(() => { b.textContent = '📋 복사'; }, 2000);
+  });
+}
+
+function escQ(s) { return s.replace(/'/g, "\\'"); }
+
+// ── 카메라 픽커 연동 API ──────────────────────────────────────────────────────
+window.LightPicker = {
+  setCamState(state) {
+    const prev = {
+      camHeight: S.camHeight, camDir: S.camDir,
+      camFrame: S.camFrame,   camTilt: S.camTilt, camPersons: S.camPersons,
+    };
+
+    S.camHeight  = state.height  || null;
+    S.camDir     = state.dir     || null;
+    S.camFrame   = state.frame   || null;
+    S.camTilt    = state.tilt    || null;
+    S.camPersons = state.persons || null;
+
+    // 연동 소스 표시
+    if (state.height  !== undefined) S._syncSource.height  = 'cam';
+    if (state.dir     !== undefined) S._syncSource.dir     = 'cam';
+    if (state.frame   !== undefined) S._syncSource.frame   = 'cam';
+    if (state.tilt    !== undefined) S._syncSource.tilt    = 'cam';
+    if (state.persons !== undefined) S._syncSource.persons = 'cam';
+
+    // 인원 자동 동기화 (수동 변경 안 한 경우만)
+    if (state.persons && S._syncSource.persons === 'cam') {
+      S.persons = Math.min(state.persons, 3);
+    }
+
+    // 연동 상태 패널 갱신
+    renderCamSyncPanel(state);
+
+    const badge = document.getElementById('camInjectBadge');
+    const hasInject = S.camHeight && CAM_PROMPT_INJECT[S.camHeight];
+    if (badge) badge.style.display = hasInject ? '' : 'none';
+
+    update();
+  },
+  getPrompt() { return buildPrompt(); },
+};
+
+// ── 연동 태그 패널 렌더링 ─────────────────────────────────────────────────────
+function renderCamSyncPanel(state) {
+  const row    = document.getElementById('camSyncRow');
+  const tags   = document.getElementById('camSyncTags');
+  const status = document.getElementById('camConnStatus');
+  if (!row || !tags) return;
+
+  const hasAny = state.height || state.dir || state.frame || state.tilt || state.persons;
+  if (!hasAny) { row.style.display = 'none'; if(status) status.textContent = '미연결 — 단독 사용 중'; return; }
+
+  row.style.display = '';
+  if (status) status.textContent = '연결됨 ✓';
+
+  // 연동 태그 항목 정의
+  const tagDefs = [
+    { key:'height',  label:'높이',   value: state.height,
+      hint: state.height ? `카메라 높이: ${state.height} → 조명 높이 권장값 적용 중` : null,
+      clear: () => { S.camHeight = null; S._syncSource.height = null; } },
+    { key:'dir',     label:'방향',   value: state.dir,
+      hint: state.dir ? `카메라 방향: ${state.dir} → 조명 방향 권장값 적용 중` : null,
+      clear: () => { S.camDir = null; S._syncSource.dir = null; } },
+    { key:'frame',   label:'프레임', value: state.frame,
+      hint: state.frame ? `카메라 프레임: ${state.frame.toUpperCase()} → 조명 경고 적용 중` : null,
+      clear: () => { S.camFrame = null; S._syncSource.frame = null; } },
+    { key:'tilt',    label:'틸트',   value: state.tilt,
+      hint: state.tilt ? `카메라 틸트: ${state.tilt} → 조명 높이 권장값 적용 중` : null,
+      clear: () => { S.camTilt = null; S._syncSource.tilt = null; } },
+    { key:'persons', label:'인원',   value: state.persons ? state.persons + '인' : null,
+      hint: state.persons ? `카메라 인원: ${state.persons}인 → 조명 인원 동기화` : null,
+      clear: () => { S.camPersons = null; S._syncSource.persons = null; } },
+  ];
+
+  tags.innerHTML = tagDefs
+    .filter(t => t.value)
+    .map(t => {
+      const isCam = S._syncSource[t.key] === 'cam';
+      const cls   = isCam ? 'from-cam' : 'manual';
+      const icon  = isCam ? '📡' : '✋';
+      const tip   = isCam ? `${t.hint}\n클릭하면 이 값의 연동을 해제하고 수동 전환` : '수동 설정 중. 클릭 시 연동 재활성화';
+      return `<span class="sync-tag ${cls}" title="${tip}"
+        onclick="toggleSyncSource('${t.key}')"
+        >${icon} ${t.label}: <strong>${t.value}</strong></span>`;
+    }).join('');
+
+  // 연동 힌트 배너 갱신
+  renderDirSyncHint();
+}
+
+// ── 연동 소스 토글 (cam ↔ manual) ────────────────────────────────────────────
+function toggleSyncSource(key) {
+  if (S._syncSource[key] === 'cam') {
+    // cam → manual: 연동 해제, 현재값 유지하되 수동으로 전환
+    S._syncSource[key] = 'manual';
+  } else {
+    // manual → cam: 연동 재활성화
+    S._syncSource[key] = 'cam';
+  }
+  // 태그 재렌더 (상태값 유지)
+  const fakeState = {
+    height:  S.camHeight,
+    dir:     S.camDir,
+    frame:   S.camFrame,
+    tilt:    S.camTilt,
+    persons: S.camPersons,
+  };
+  renderCamSyncPanel(fakeState);
+  update();
+}
+
+// ── 방향 연동 힌트 배너 ────────────────────────────────────────────────────────
+function renderDirSyncHint() {
+  const bar  = document.getElementById('dirSyncWarnBar');
+  const txt  = document.getElementById('dirSyncWarnText');
+  if (!bar || !txt) return;
+
+  const hints = [];
+
+  // 카메라 방향 기반 힌트
+  if (S.camDir && S._syncSource.dir === 'cam') {
+    const dc = CAM_CONSTRAINTS['dir_' + S.camDir];
+    if (dc && dc.note) hints.push(dc.note);
+    // 역광 경고
+    if (S.camDir === 'rear' && S.dir && ['front','front_45'].includes(S.dir)) {
+      hints.push('⚠️ 후면 카메라에 전면광 선택 — 물리적 충돌');
+    }
+  }
+  // 카메라 틸트 기반 힌트
+  if (S.camTilt && S._syncSource.tilt === 'cam') {
+    const tc = CAM_CONSTRAINTS['tilt_' + S.camTilt];
+    if (tc && tc.note) hints.push(tc.note);
+  }
+  // 인원 힌트
+  if (S.camPersons >= 3) {
+    hints.push('3인+ — 장면 전체 조명(Scene Light·환경광) 위주 설정 권장');
+  }
+
+  if (hints.length) {
+    bar.style.display = '';
+    txt.innerHTML = hints.join(' &nbsp;·&nbsp; ');
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+// ── 초기화 ────────────────────────────────────────────────────────────────────
+S._shadowSuggestPrompt = '';
+update();
+
+// ── postMessage 브릿지 (통합 피커와 통신) ──
+window.addEventListener('message', function(e) {
+  if (!e.data) return;
+  if (e.data.type === 'LIGHT_GET_PROMPT') {
+    parent.postMessage({ type: 'LIGHT_PROMPT', prompt: buildPrompt() }, '*');
+  }
+  if (e.data.type === 'LIGHT_RESET') resetAll();
+  if (e.data.type === 'CAM_STATE') {
+    window.LightPicker.setCamState(e.data.state || {});
+  }
+});
+// index2.html의 스크립트 하단에 추가
+(function() {
+  var _orig = updatePrompt;
+  updatePrompt = function() {
+    _orig.apply(this, arguments);
+    try { 
+      parent.postMessage({ type: 'LIGHT_PROMPT', prompt: buildPrompt() }, '*'); 
+    } catch(e){}
+  };
+})();
+
+// 부모가 계산해서 보내주는 자동 조명 설정 처리
+window.addEventListener('message', function(e) {
+  if (e.data.type === 'LIGHTING_AUTO_SYNC') {
+    const auto = e.data.payload;
+    // index2의 내부 로직에 따라 S(상태)를 변경
+    if (auto.lightDirection) S.direction = auto.lightDirection;
+    if (auto.lightHeight) S.height = auto.lightHeight;
+    
+    update(); // UI 반영
+    updatePrompt(); // 프롬프트 갱신 및 부모 전송
+  }
+})();
+</script>
+</body>
+</html>
