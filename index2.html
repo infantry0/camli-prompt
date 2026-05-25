@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>조명 피커 v1</title>
+<title>조명 피커 v2</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+KR:wght@400;500;700&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -149,7 +149,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 
 <div class="hd">
   <h1>💡 조명 피커</h1>
-  <span class="badge">v1.8 — + Scene↔Subject Constraint · Prompt Mixing · Light Interaction</span>
+  <span class="badge">v2.0 — + Material Type · Rim Color · 무드 충돌 경고 3종 · KR 디스플레이 완성</span>
   <div class="lang-toggle" style="margin-left:8px">
     <button class="lang-btn active" id="btnEN" onclick="setLang('en')">EN</button>
     <button class="lang-btn" id="btnKR" onclick="setLang('kr')">KR</button>
@@ -304,11 +304,15 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 <div class="panel locked" id="pAmbient">
   <div class="ptitle"><span class="step-n">04</span> 환경광 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">전체 노출 느낌</span></div>
   <div class="g5" id="ambientGrid"></div>
+  <!-- ambient × scene / named 무드 충돌 경고 -->
+  <div id="moodConflictWarn" style="display:none;background:rgba(224,175,104,.08);border:1px solid rgba(224,175,104,.3);border-radius:6px;padding:7px 12px;margin-top:10px;font-size:10px;color:var(--yel)">
+    ⚠️ <span id="moodConflictWarnText"></span>
+  </div>
 </div>
 
 <!-- ── STEP 4.5: 광원 감쇠 + 피부 반사 ── -->
 <div class="panel locked" id="pAdvanced">
-  <div class="ptitle"><span class="step-n" style="color:var(--cyn)">✦</span> 고급 옵션 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">Color Contrast · Falloff · Skin Response · Light Interaction</span></div>
+  <div class="ptitle"><span class="step-n" style="color:var(--cyn)">✦</span> 고급 옵션 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">Color Contrast · Falloff · Skin Response · Material · Light Interaction</span></div>
 
   <div class="section-label">컬러 대비 (Color Contrast)</div>
   <div class="g3" id="colorContrastGrid" style="margin-bottom:12px"></div>
@@ -318,7 +322,16 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
   <div class="slider-row" id="falloffRow" style="margin-bottom:12px"></div>
 
   <div class="section-label">피부 반사 특성 (Skin Response)</div>
-  <div class="g4" id="skinGrid" style="margin-bottom:12px"></div>
+  <div class="g4" id="skinGrid" style="margin-bottom:6px"></div>
+
+  <!-- quality × skin 경고 -->
+  <div id="qualitySkinWarn" style="display:none;background:rgba(224,175,104,.08);border:1px solid rgba(224,175,104,.3);border-radius:6px;padding:7px 12px;margin-bottom:10px;font-size:10px;color:var(--yel)">
+    ⚠️ <span id="qualitySkinWarnText"></span>
+  </div>
+
+  <div class="section-sep"></div>
+  <div class="section-label">소재 반사 특성 (Material Type) <span style="font-size:9px;color:var(--muted);font-weight:300;margin-left:4px">피부 외 소재 — 선택 사항</span></div>
+  <div class="g5" id="materialGrid" style="margin-bottom:12px"></div>
 
   <div class="section-sep"></div>
   <div class="section-label">간접광 · 빛 상호작용 <span style="font-size:9px;color:var(--muted);font-weight:300;margin-left:4px">Light Interaction — Scene과 Subject를 물리적으로 연결</span></div>
@@ -645,6 +658,54 @@ const SKIN_RESPONSE = [
    prompt:'visible skin texture, pores visible, detailed skin surface, raw realism'},
 ];
 
+// 림 색온도 (warm_rim / cool_rim 선택 시 활성)
+const RIM_COLOR = [
+  {id:'warm',  label:'Warm',  kr:'웜 림',  su:'황금·오렌지 엣지', em:'🟠',
+   prompt:'warm orange-tinted rim light, golden edge glow'},
+  {id:'cool',  label:'Cool',  kr:'쿨 림',  su:'청색·아이스 엣지', em:'❄️',
+   prompt:'cool blue-tinted rim light, icy edge highlight'},
+  {id:'comp',  label:'Complementary', kr:'보색 림', su:'보색 대비 엣지', em:'🌗',
+   prompt:'complementary colored rim light, contrasting color edge separation'},
+];
+
+// 소재 반사 특성 (Material Type — skin 외 소재)
+const MATERIAL_TYPE = [
+  {id:'cloth',  label:'Cloth',  kr:'천·섬유',  su:'난반사, 표면 질감', em:'🧣',
+   prompt:'fabric surface, diffuse cloth material, soft light absorption, visible weave texture, no specular highlight'},
+  {id:'metal',  label:'Metal',  kr:'금속',     su:'강한 정반사',       em:'🔩',
+   prompt:'metallic surface, strong specular reflection, sharp highlight point, mirror-like sheen, reflective material'},
+  {id:'glass',  label:'Glass',  kr:'유리',     su:'투명·굴절',         em:'🔮',
+   prompt:'glass surface, transparent material, light refraction, caustic highlights, transmission and reflection combined'},
+  {id:'hair',   label:'Hair',   kr:'머리카락', su:'SSS + 하이라이트',  em:'💇',
+   prompt:'hair specular, thin translucent strands, subsurface scattering through hair, sharp highlight along hair shaft, silky sheen'},
+  {id:'skin',   label:'Skin',   kr:'피부',     su:'SSS, 반투명',       em:'🫧',
+   prompt:'skin subsurface scattering, translucent dermis layer, soft glow under surface, biological material'},
+];
+
+// quality × skinResponse 교차 경고 테이블
+const QUALITY_SKIN_WARN = {
+  'hard|glossy': 'Hard + Glossy — 하이라이트 번짐(화이트 홀) 위험. Soft 또는 Mixed 권장.',
+  'hard|satin':  'Hard + Satin — 강한 Specular 엣지 발생. 의도적 사용이 아니면 Mixed 권장.',
+};
+
+// ambient × sceneLight 무드 충돌 테이블
+const AMBIENT_SCENE_WARN = {
+  'lowkey|harsh_sun':     'Low Key + Harsh Sun — 강한 자연 직사광과 어두운 무드 충돌. 물리적으로 부자연스럽습니다.',
+  'lowkey|golden_hour_scene': 'Low Key + Golden Hour — 황금빛 밝은 환경과 Low Key 무드가 충돌합니다.',
+  'highkey|night_sky':    'High Key + Night — 야간 저조도와 High Key 밝기 충돌. 의도적 대비가 아니라면 변경 권장.',
+  'highkey|candle_scene': 'High Key + Candlelight — 촛불 협소 광원과 High Key 전체 밝기 충돌.',
+  'dramatic|overcast':    'Dramatic + Overcast — 흐린 확산광은 극적 명암을 만들기 어렵습니다.',
+};
+
+// named × ambient 이중 무드 경고 테이블
+const NAMED_AMBIENT_WARN = {
+  'angel|lowkey':      '⚠ Angel(하이키 뷰티) + Low Key — 정반대 무드. 의도된 대비인지 확인하세요.',
+  'noir|highkey':      '⚠ Noir(어두운 대비) + High Key — 느와르 무드가 High Key에서 소실됩니다.',
+  'villain|highkey':   '⚠ Villain(언더라이트 극적) + High Key — 빌런 무드와 충돌합니다.',
+  'rim_only|flat':     '⚠ Rim Only + Flat Fill — 실루엣 효과가 플랫 필에 의해 상쇄됩니다.',
+  'golden_hour|lowkey':'⚠ Golden Hour + Low Key — 따뜻한 황금빛과 Low Key 어둠이 충돌합니다.',
+};
+
 // 카메라 상태 → 조명 제약
 const CAM_CONSTRAINTS = {
   // ── 카메라 높이 기반 ──
@@ -909,7 +970,8 @@ const S = {
   shadowColor: null,
   falloff: null,
   skinResponse: null,
-  rim: null, ambient: null,
+  materialType: null,
+  rim: null, rimColor: null, ambient: null,
   camHeight: null, camDir: null, camFrame: null,
   camTilt: null, camPersons: null,
   // 연동 소스 추적 — 'cam'이면 카메라에서 자동 주입, null이면 수동
@@ -1120,9 +1182,36 @@ function renderRim() {
       <span class="la">${r.label}</span>
     </div>`;
   }).join('');
-  // 림 색온도 (colored 선택 시 표시)
+  // 림 색온도 — warm_rim / cool_rim / colored 선택 시 표시
   const showColor = S.rim && !['none','subtle','strong','hair','separation','kicker','fill'].includes(S.rim);
   document.getElementById('rimColorLabel').style.display = showColor ? 'flex' : 'none';
+  // rimColorRow 실제 렌더
+  const rcRow = document.getElementById('rimColorRow');
+  if (showColor) {
+    rcRow.innerHTML = RIM_COLOR.map(c => {
+      const sel = S.rimColor === c.id;
+      return `<div class="slider-btn${sel?' sel':''}" onclick="selectRimColor('${c.id}')">
+        <span class="sl-la">${c.em} ${LANG==='kr'?c.kr:c.label}</span>
+        <span class="sl-su">${c.su}</span>
+      </div>`;
+    }).join('');
+  } else {
+    rcRow.innerHTML = '';
+    S.rimColor = null;
+  }
+}
+
+function renderMaterial() {
+  const g = document.getElementById('materialGrid');
+  if (!g) return;
+  g.innerHTML = MATERIAL_TYPE.map(m => {
+    const sel = S.materialType === m.id;
+    return `<div class="btn${sel?' sel':''}" onclick="selectMaterialType('${m.id}')">
+      <span class="em">${m.em}</span>
+      <span class="la">${LANG==='kr'?m.kr:m.label}</span>
+      <span class="su">${m.su}</span>
+    </div>`;
+  }).join('');
 }
 
 function renderLightInteraction() {
@@ -1281,12 +1370,16 @@ function selectSkin(id)        { S.skinResponse = S.skinResponse === id ? null :
 
 function selectShadowDepth(id) { S.shadowDepth = S.shadowDepth === id ? null : id; update(); }
 function selectShadowEdge(id)  { S.shadowEdge  = S.shadowEdge  === id ? null : id; update(); }
-function selectRim(id)         { S.rim         = S.rim         === id ? null : id; update(); }
+function selectRim(id)         { S.rim         = S.rim         === id ? null : id; if (!S.rim) S.rimColor = null; update(); }
+function selectRimColor(id)    { S.rimColor    = S.rimColor    === id ? null : id; update(); }
+function selectMaterialType(id){ S.materialType= S.materialType=== id ? null : id; update(); }
 function selectAmbient(id)     { S.ambient     = S.ambient     === id ? null : id; update(); }
 
 function resetAll() {
   Object.keys(S).forEach(k => { S[k] = null; });
+  S.persons = 1;
   S._shadowSuggestPrompt = '';
+  S._syncSource = { height: null, dir: null, frame: null, tilt: null, persons: null };
   update();
 }
 
@@ -1322,6 +1415,7 @@ function update() {
   renderRim();
   renderAmbient();
   renderLightInteraction();
+  renderMaterial();
 
   // Silhouette Constraint
   const isSilhouette = S.ambient === 'lowkey' || S.named === 'rim_only' || S.named === 'silhouette_pair' || S.macro === 'silhouette_macro';
@@ -1376,6 +1470,35 @@ function update() {
   // 인원 버튼 동기화 (카메라 연동 시)
   if (S.camPersons && S._syncSource.persons === 'cam') {
     renderPersonsL();
+  }
+
+  // quality × skinResponse 교차 경고
+  const qsBar  = document.getElementById('qualitySkinWarn');
+  const qsText = document.getElementById('qualitySkinWarnText');
+  if (qsBar && qsText) {
+    const key = S.quality && S.skinResponse ? `${S.quality}|${S.skinResponse}` : null;
+    const msg = key ? QUALITY_SKIN_WARN[key] : null;
+    qsBar.style.display = msg ? '' : 'none';
+    if (msg) qsText.textContent = msg;
+  }
+
+  // ambient × sceneLight 무드 충돌 경고
+  // named × ambient 이중 무드 경고
+  const mcBar  = document.getElementById('moodConflictWarn');
+  const mcText = document.getElementById('moodConflictWarnText');
+  if (mcBar && mcText) {
+    let mcMsg = null;
+    if (S.ambient && S.sceneLight) {
+      mcMsg = AMBIENT_SCENE_WARN[`${S.ambient}|${S.sceneLight}`] || null;
+    }
+    if (!mcMsg && S.ambient && S.named) {
+      mcMsg = NAMED_AMBIENT_WARN[`${S.named}|${S.ambient}`] || null;
+    }
+    if (!mcMsg && S.ambient && S.macro) {
+      mcMsg = NAMED_AMBIENT_WARN[`${S.macro}|${S.ambient}`] || null;
+    }
+    mcBar.style.display = mcMsg ? '' : 'none';
+    if (mcMsg) mcText.textContent = mcMsg;
   }
 
   // 방향/틸트 연동 힌트 갱신
@@ -1531,6 +1654,11 @@ function buildPrompt() {
   if (S.rim && S.rim !== 'none') {
     const r = RIM_EFFECT.find(x => x.id === S.rim);
     if (r && r.prompt) parts.push(r.prompt);
+    // 림 색온도 (warm_rim/cool_rim/colored 선택 시 추가)
+    if (S.rimColor) {
+      const rc = RIM_COLOR.find(x => x.id === S.rimColor);
+      if (rc && rc.prompt) parts.push(rc.prompt);
+    }
   }
 
   // ── 그림자 색온도
@@ -1549,6 +1677,12 @@ function buildPrompt() {
   if (S.skinResponse) {
     const sk = SKIN_RESPONSE.find(x => x.id === S.skinResponse);
     if (sk && sk.prompt) parts.push(sk.prompt);
+  }
+
+  // ── Material Type (skin 외 소재)
+  if (S.materialType) {
+    const mt = MATERIAL_TYPE.find(x => x.id === S.materialType);
+    if (mt && mt.prompt) parts.push(mt.prompt);
   }
 
   // ── Color Contrast
@@ -1625,6 +1759,18 @@ function buildDisplay() {
   if (S.skinResponse) {
     const sk = SKIN_RESPONSE.find(x => x.id === S.skinResponse);
     if (sk) parts.push(sk.kr + ' 피부');
+  }
+  if (S.materialType) {
+    const mt = MATERIAL_TYPE.find(x => x.id === S.materialType);
+    if (mt) parts.push(mt.kr + ' 소재');
+  }
+  if (S.colorContrast) {
+    const cc = COLOR_CONTRAST.find(x => x.id === S.colorContrast);
+    if (cc) parts.push(cc.kr + ' 컬러');
+  }
+  if (S.lightInteraction) {
+    const li = LIGHT_INTERACTION.find(x => x.id === S.lightInteraction);
+    if (li) parts.push(li.kr);
   }
 
   return parts.join(', ');
@@ -1835,37 +1981,21 @@ S._shadowSuggestPrompt = '';
 update();
 
 // ── postMessage 브릿지 (통합 피커와 통신) ──
-// 핸들러를 하나로 통합, LIGHTING_AUTO_SYNC 오탈자 수정, 잘못된 상태 키 수정
 window.addEventListener('message', function(e) {
   if (!e.data) return;
-
   if (e.data.type === 'LIGHT_GET_PROMPT') {
     parent.postMessage({ type: 'LIGHT_PROMPT', prompt: buildPrompt() }, '*');
   }
-
   if (e.data.type === 'LIGHT_RESET') resetAll();
-
   if (e.data.type === 'CAM_STATE') {
     window.LightPicker.setCamState(e.data.state || {});
   }
-
-  // 부모가 계산해서 보내주는 자동 조명 추천값 적용
-  // 수정: S.direction(없는 키) → S.dir, 핸들러 중복 제거, 즉시실행 () 오탈자 제거
-  if (e.data.type === 'LIGHTING_AUTO_SYNC') {
-    const auto = e.data.payload;
-    if (auto.lightDirection) S.dir    = auto.lightDirection;
-    if (auto.lightHeight)    S.height = auto.lightHeight;
-    update();
-    try { parent.postMessage({ type: 'LIGHT_PROMPT', prompt: buildPrompt() }, '*'); } catch(_) {}
-  }
 });
-
-// 선택 변경 시 부모에게 자동 전송 — 몽키패치 대신 update() 후미에 직접 연결
 (function() {
-  const _origUpdate = update;
-  update = function() {
-    _origUpdate.apply(this, arguments);
-    try { parent.postMessage({ type: 'LIGHT_PROMPT', prompt: buildPrompt() }, '*'); } catch(_) {}
+  var _orig = updatePrompt;
+  updatePrompt = function() {
+    _orig.apply(this, arguments);
+    try { parent.postMessage({ type: 'LIGHT_PROMPT', prompt: buildPrompt() }, '*'); } catch(e){}
   };
 })();
 </script>

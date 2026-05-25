@@ -128,6 +128,17 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 .lock-set-desc{font-size:10px;color:var(--muted)}
 .lock-set-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
 .lock-tag{font-family:'JetBrains Mono',monospace;font-size:9px;padding:1px 6px;border-radius:3px;background:rgba(247,118,142,.12);border:1px solid rgba(247,118,142,.3);color:var(--red)}
+/* 전경 구도 패널 */
+.fg-subject-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.fg-sub-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:8px}
+.fg-focus-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:8px}
+.fg-section-title{font-size:10px;font-weight:700;color:var(--muted);margin-bottom:5px;margin-top:10px;display:flex;align-items:center;gap:6px}
+.fg-section-title::after{content:'';flex:1;height:1px;background:var(--b1)}
+.fg-active-banner{background:rgba(125,207,255,.08);border:1px solid rgba(125,207,255,.3);border-radius:var(--r);padding:7px 11px;font-size:10px;color:var(--cyn);font-family:'JetBrains Mono',monospace;margin-bottom:10px;display:none}
+.fg-active-banner.show{display:block}
+.fg-lock-notice{font-size:10px;color:var(--red);font-family:'JetBrains Mono',monospace;margin-top:6px;display:none}
+.fg-lock-notice.show{display:block}
+
 /* aspect ratio */
 .ar-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
 .ar-btn{padding:8px 4px}
@@ -159,7 +170,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
 
 <div class="hd">
   <h1>📷 카메라 포지션 선택기</h1>
-  <span class="badge">v2.5 — Prompt 역할 조립 · Crop Anchor · Vertical Placement</span>
+  <span class="badge">v2.7b — Bridge: CAM_SYNC + 변환 테이블 (index.html 통합용)</span>
   <div class="lang-toggle" style="margin-left:8px">
     <button class="lang-btn active" id="btnEN" onclick="setLang('en')">EN</button>
     <button class="lang-btn" id="btnKR" onclick="setLang('kr')">KR</button>
@@ -235,6 +246,25 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-seri
   <div class="ptitle"><span class="step-n">03.5</span> 틸트 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">렌즈가 향하는 방향 — 높이와 별개</span></div>
   <div class="g3" id="tiltGrid"></div>
   <div id="tiltHint" style="font-size:10px;color:var(--dim);font-family:'JetBrains Mono',monospace;margin-top:7px"></div>
+</div>
+
+<!-- 전경 구도 패널 -->
+<div class="panel" id="pFgComp">
+  <div class="ptitle"><span class="step-n" style="color:var(--cyn)">🎭</span> 전경 구도 <span style="font-size:9px;color:var(--muted);font-weight:400;margin-left:4px">전경 피사체 + 배경 인물 — 선택 시 포커스·렌즈 패널 연동</span></div>
+  <div class="fg-active-banner" id="fgBanner">⚡ 전경 구도 활성 — 포커스 포인트·압축 원근 잠금됨</div>
+
+  <div class="fg-section-title">전경 피사체 선택</div>
+  <div class="fg-subject-grid" id="fgSubjectGrid"></div>
+
+  <div id="fgSubOptions" style="display:none">
+    <div class="fg-section-title">배경 인물 크기 <span style="font-size:9px;color:var(--dim);font-weight:400;margin-left:4px">카메라~인물 거리감</span></div>
+    <div class="fg-sub-grid" id="fgPersonSizeGrid"></div>
+
+    <div class="fg-section-title">배경 인물 포커스</div>
+    <div class="fg-focus-grid" id="fgPersonFocusGrid"></div>
+  </div>
+
+  <div class="fg-lock-notice" id="fgLockNotice"></div>
 </div>
 
 <!-- STEP 3.5: 포커스 -->
@@ -354,6 +384,14 @@ const DIST_GROUPS = [
     group: 'Far', label: 'Far', color: '#9ece6a',
     items: [
       { id:'fullbody', label:'Full Body Shot',         sub:'전신',        type:'constraint', prompt:'full body shot',                   promptFull:'full body remains within frame, head to feet fully visible, no cropping',  kr:'전신 샷' },
+      { id:'dyn_low_full', label:'Low-Angle Close Full Body', sub:'근접+상향+광각 전신', type:'constraint',
+        prompt:'full body shot, camera very close to subject at ankle to knee height, lens sharply tilted upward, wide-angle lens (18-24mm), exaggerated low-angle perspective, legs elongated toward camera, full figure head to toe within frame, no cropping, vertical composition',
+        promptFull:'full body remains within frame head to toe, camera positioned very close near subject\'s feet at ankle-knee level, lens sharply angled upward, wide-angle 18-24mm lens, strong perspective distortion making legs appear elongated, dramatic upward foreshortening, both feet visible at bottom, vertical composition',
+        kr:'근접 로우앵글 전신 — 발 근처에서 광각으로 올려다보기, 다리 길어 보이는 강한 원근감' },
+      { id:'dyn_high_full', label:'High-Angle Close Full Body', sub:'근접+하향+광각 전신', type:'constraint',
+        prompt:'full body shot, camera positioned close above subject, lens steeply tilted downward, wide-angle lens (18-24mm), editorial high-angle perspective, strong top-down foreshortening, full figure head to toe within frame, no cropping, vertical composition',
+        promptFull:'full body remains within frame head to toe, camera positioned close directly above subject, lens steeply angled downward, wide-angle 18-24mm lens, strong downward perspective compression, dramatic foreshortening from head to feet, both feet visible, editorial stylistic viewpoint, vertical composition',
+        kr:'근접 하이앵글 전신 — 피사체 바로 위에서 광각으로 내려다보기, 에디토리얼 스타일 원근감' },
       { id:'envport',  label:'Environmental Portrait', sub:'롱샷·관찰',   type:'constraint', prompt:'long shot, environmental portrait', promptFull:'full body within frame, environmental context visible around subject',     kr:'롱샷, 환경 포트레이트' },
       { id:'wide',     label:'Wide Shot',              sub:'와이드·딥샷', type:'constraint', prompt:'wide shot, deep shot',             promptFull:'wide shot, subject and full environment remain within frame, no cropping',  kr:'와이드 샷, 딥샷' },
     ]
@@ -630,6 +668,100 @@ const POSE_CONTEXT = [
   },
 ];
 
+// ═══ 전경 구도 데이터 ═══════════════════════════════════════════
+
+// 전경 피사체 종류
+const FG_SUBJECT = [
+  {
+    id:'fg_hand',   label:'손 전경',  sub:'Hand in FG', em:'🖐',
+    prompt:'hand(s) large in foreground very close to lens, subject/person visible in background behind hand, camera extremely close to hand, wide-angle lens, strong depth separation between foreground hand and background figure',
+    kr:'손이 전경에 크게 — 인물은 뒤에',
+    // 이 전경 피사체에 권장/주의/충돌 높이
+    recHeight:  ['chest','eye','head'],
+    warnHeight: ['ground','ankle','knee','gentle_high'],
+    noHeight:   ['mid_high','elevated','overhead'],
+    // 권장 틸트
+    recTilt:    ['tilt_level','tilt_up'],
+    // 권장 방향
+    recDir:     ['front','diagonal'],
+    // 권장 dist
+    recDist:    ['fullbody','medium','waistup'],
+    warnDist:   ['upperbody','headshot','portrait','bust','envport','wide','dyn_low_full','dyn_high_full'],
+    noDist:     ['macro','ecu','tight'],
+  },
+  {
+    id:'fg_feet',   label:'발 전경',  sub:'Feet in FG',  em:'👟',
+    prompt:'feet/shoes large in foreground very close to lens, subject\'s upper body or face visible in background behind feet, camera near floor level, wide-angle lens, extreme upward perspective, strong foreshortening, feet closest to camera',
+    kr:'발/신발이 전경에 크게 — 인물은 뒤에',
+    recHeight:  ['ground','ankle','knee'],
+    warnHeight: ['chest','eye'],
+    noHeight:   ['head','gentle_high','mid_high','elevated','overhead'],
+    recTilt:    ['tilt_up'],
+    recDir:     ['front','diagonal','side'],
+    recDist:    ['fullbody','dyn_low_full'],
+    warnDist:   ['medium','waistup','upperbody','envport','wide'],
+    noDist:     ['macro','ecu','tight','headshot','portrait','bust','dyn_high_full'],
+  },
+  {
+    id:'fg_object', label:'사물 전경', sub:'Object in FG', em:'🎸',
+    prompt:'object large in foreground very close to lens, partially obscuring view, subject/person visible in background behind object, camera close to foreground object, wide-angle lens, strong depth separation, foreground object out of focus or sharp',
+    kr:'사물이 전경에 크게 — 인물은 뒤에',
+    recHeight:  ['chest','eye','head','knee'],
+    warnHeight: ['ground','ankle','gentle_high'],
+    noHeight:   ['mid_high','elevated','overhead'],
+    recTilt:    ['tilt_level','tilt_up','tilt_down'],
+    recDir:     ['front','diagonal','side'],
+    recDist:    ['fullbody','medium','waistup','upperbody','envport'],
+    warnDist:   ['headshot','portrait','bust','wide','dyn_low_full','dyn_high_full'],
+    noDist:     ['macro','ecu','tight'],
+  },
+  {
+    id:'fg_none',   label:'없음',     sub:'전경 구도 해제', em:'✕',
+    prompt:'',
+    kr:'전경 구도 없음',
+    recHeight:[], warnHeight:[], noHeight:[],
+    recTilt:[], recDir:[], recDist:[], warnDist:[], noDist:[],
+  },
+];
+
+// 배경 인물 크기 (카메라~인물 거리감)
+const FG_PERSON_SIZE = [
+  {
+    id:'bg_small',  label:'작게',   sub:'먼 배경 · 작은 실루엣', em:'🔹',
+    prompt:'person small in background, far behind foreground subject, background figure appears diminutive',
+    kr:'배경 인물 작게 — 멀리 있는 실루엣',
+  },
+  {
+    id:'bg_mid',    label:'중간',   sub:'중경 · 반신 이상', em:'🔸',
+    prompt:'person in midground background, half to full body visible behind foreground subject, moderate background scale',
+    kr:'배경 인물 중경 — 반신 이상 보임',
+  },
+  {
+    id:'bg_large',  label:'크게',   sub:'바로 뒤 · 거의 꽉 참', em:'🔶',
+    prompt:'person large in background, just behind foreground subject, background figure nearly fills remaining frame',
+    kr:'배경 인물 크게 — 바로 뒤, 거의 꽉 참',
+  },
+];
+
+// 배경 인물 포커스
+const FG_PERSON_FOCUS = [
+  {
+    id:'bg_blur',   label:'흐림',   sub:'보케 · 배경 분리', em:'🌫',
+    prompt:'background person softly out of focus, bokeh blur, shallow depth of field separating foreground from background subject',
+    kr:'배경 인물 흐림 — 보케로 전경 분리',
+  },
+  {
+    id:'bg_semi',   label:'반선명', sub:'윤곽은 보임', em:'🌥',
+    prompt:'background person slightly soft focus, outline visible but not tack-sharp, mild depth of field',
+    kr:'배경 인물 반선명 — 윤곽은 보이는 수준',
+  },
+  {
+    id:'bg_sharp',  label:'선명',   sub:'전·배경 모두 선명', em:'🌟',
+    prompt:'background person in sharp focus, deep depth of field, both foreground subject and background figure crisp and clear',
+    kr:'배경 인물 선명 — 전·배경 모두 선명',
+  },
+];
+
 // 렌즈 효과 (렌즈 없이 광학적 결과만)
 // ※ 같은 "왜곡"이라도 방향·쓰임이 다름 — 한글 설명으로 구분
 const LENS_EFFECT = [
@@ -686,7 +818,7 @@ const FRAMING_DENSITY = [
     id:'tight_frame', label:'타이트',     sub:'피사체가 프레임 대부분 차지', em:'▣',
     density:'tight', position:'center',
     // 충돌: macro/ecu는 이미 타이트가 기본 → 중복, full body는 어색
-    distConflict: ['fullbody','envport','wide'],   // warn 대상
+    distConflict: ['fullbody','dyn_low_full','dyn_high_full','envport','wide'],   // warn 대상
     distIncompat: [],                              // no 대상
     prompt:'tight framing, subject fills most of the frame',
     kr:'타이트 프레이밍 — 피사체가 화면 대부분 차지',
@@ -904,6 +1036,34 @@ const CONSTRAINTS = {
   'medium_rear_ground':       'warn',
   'medium_side_elevated':     'warn',
   'medium_side_overhead':     'no',
+
+  // ── dyn_low_full (근접 로우앵글 전신) ─────────────
+  'dyn_low_full_front_low':   'ok',
+  'dyn_low_full_front_eye':   'warn',
+  'dyn_low_full_front_high':  'no',
+  'dyn_low_full_diagonal_low':'ok',
+  'dyn_low_full_diagonal_eye':'warn',
+  'dyn_low_full_diagonal_high':'no',
+  'dyn_low_full_side_low':    'ok',
+  'dyn_low_full_side_eye':    'warn',
+  'dyn_low_full_side_high':   'no',
+  'dyn_low_full_rear_low':    'warn',
+  'dyn_low_full_rear_eye':    'warn',
+  'dyn_low_full_rear_high':   'no',
+
+  // ── dyn_high_full (근접 하이앵글 전신) ────────────
+  'dyn_high_full_front_high': 'ok',
+  'dyn_high_full_front_eye':  'warn',
+  'dyn_high_full_front_low':  'no',
+  'dyn_high_full_diagonal_high':'ok',
+  'dyn_high_full_diagonal_eye':'warn',
+  'dyn_high_full_diagonal_low':'no',
+  'dyn_high_full_side_high':  'ok',
+  'dyn_high_full_side_eye':   'warn',
+  'dyn_high_full_side_low':   'no',
+  'dyn_high_full_rear_high':  'warn',
+  'dyn_high_full_rear_eye':   'warn',
+  'dyn_high_full_rear_low':   'no',
 
   // ── fullbody ──────────────────────────────────────
   'fullbody_rear_ground':     'warn',
@@ -1357,6 +1517,46 @@ const RECS = {
   },
 
   /* ── Far ──────────────────────────────────────── */
+
+  /* Dynamic Perspective Full Body — 근접+광각 전신 */
+  dyn_low_full_front_low:{
+    구도:[{en:'vanishing point composition (upward)',kr:'소실점 구도 (위를 향한)'},{en:'extreme low angle perspective',kr:'극단적 로우앵글 원근 구도'},{en:'dynamic triangles composition',kr:'역동적 삼각형 구도'}],
+    앵글:['worm\'s eye view',{en:'extreme low upward angle, lens tilted sharply up',kr:'렌즈 급격히 위를 향한 극단적 상향 앵글'}],
+    위치:[{en:'camera near subject\'s feet, ankle to knee level, close distance',kr:'발목~무릎 높이, 피사체에 바짝 근접'},{en:'lens aimed sharply upward from floor level',kr:'바닥에서 위를 향해 렌즈 틸트'}],
+    배치느낌:[{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'wide-angle lens close proximity, legs appear elongated',kr:'광각 근접, 다리가 길고 웅장하게'},{en:'empowering heroic angle',kr:'영웅적·압도적 앵글'}],
+  },
+  dyn_low_full_diagonal_low:{
+    구도:[{en:'dynamic diagonal framing',kr:'역동적 대각선 프레이밍'},{en:'vanishing point composition (upward)',kr:'소실점 구도 (위를 향한)'}],
+    앵글:['worm\'s eye view',{en:'extreme low diagonal upward angle',kr:'극단적 로우 대각 상향 앵글'}],
+    위치:[{en:'camera near subject\'s feet, diagonal front position, close',kr:'발목 근처 대각 전면 근접'},{en:'floor-level diagonal placement',kr:'바닥 레벨 대각 배치'}],
+    배치느낌:[{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'dramatic perspective distortion',kr:'극적인 원근 왜곡'},{en:'editorial fashion angle',kr:'에디토리얼 패션 앵글'}],
+  },
+  dyn_low_full_side_low:{
+    구도:[{en:'dynamic diagonal framing',kr:'역동적 대각선 프레이밍'},{en:'extreme low angle perspective, upward',kr:'극단적 로우 상향 원근 구도'}],
+    앵글:['worm\'s eye view',{en:'lateral extreme low angle',kr:'측면 극단적 로우앵글'}],
+    위치:[{en:'camera at ankle level, very close to subject, side placement',kr:'발목 높이 측면 바짝 근접'}],
+    배치느낌:[{en:'Dynamic and Intimate',kr:'역동적이면서 밀착된 느낌'},{en:'legs tower toward sky, powerful silhouette',kr:'하늘을 향한 다리, 강렬한 실루엣'}],
+  },
+
+  dyn_high_full_front_high:{
+    구도:[{en:'steep top-down perspective, editorial',kr:'급격한 하이앵글 원근, 에디토리얼'},{en:'subject foreshortened from head to feet',kr:'머리~발까지 강한 원근 수축 구도'}],
+    앵글:[{en:'steep high angle, camera close above subject',kr:'피사체 바로 위 급격한 하이앵글'},{en:'close overhead perspective',kr:'근접 오버헤드 시점'}],
+    위치:[{en:'camera close and directly above subject, wide-angle lens',kr:'피사체 바로 위 근접, 광각 렌즈'},{en:'overhead close downward perspective',kr:'오버헤드 근접 하향 시점'}],
+    배치느낌:[{en:'editorial fashion overhead',kr:'에디토리얼 패션 오버헤드'},{en:'stylish top-down perspective',kr:'스타일리시한 탑다운 원근'},{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'}],
+  },
+  dyn_high_full_diagonal_high:{
+    구도:[{en:'diagonal top-down editorial perspective',kr:'대각 탑다운 에디토리얼 원근'},{en:'layered depth composition from above',kr:'위에서 내려다본 레이어드 깊이감'}],
+    앵글:[{en:'steep diagonal high angle, close above',kr:'급격한 대각 하이앵글, 바로 위'},{en:'close overhead diagonal',kr:'근접 오버헤드 대각'}],
+    위치:[{en:'camera close above and diagonally in front, wide-angle',kr:'대각 전면 위 근접, 광각'}],
+    배치느낌:[{en:'editorial fashion overhead',kr:'에디토리얼 패션 오버헤드'},{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'}],
+  },
+  dyn_high_full_side_high:{
+    구도:[{en:'lateral overhead editorial perspective',kr:'측면 오버헤드 에디토리얼 원근'},{en:'figure foreshortened from head to feet, side view',kr:'머리~발 측면 원근 수축'}],
+    앵글:[{en:'steep side high angle, close above',kr:'급격한 측면 하이앵글, 바로 위'}],
+    위치:[{en:'camera close above, side placement, wide-angle',kr:'측면 바로 위 근접, 광각'}],
+    배치느낌:[{en:'editorial stylish viewpoint',kr:'에디토리얼 스타일리시 시점'},{en:'Cinematic Grandeur',kr:'웅장한 시네마틱 연출'}],
+  },
+
   fullbody_front_eye:{
     구도:[{en:'symmetrical composition',kr:'대칭 구도'},{en:'vanishing point composition',kr:'소실점 구도'},{en:'rule of thirds, subject left',kr:'삼등분 구도, 피사체 좌측'}],
     앵글:[{en:'eye level shot',kr:'아이레벨 샷'},{en:'middle angle, balanced view',kr:'중간 앵글, 균형 뷰'}],
@@ -1628,6 +1828,7 @@ const S = { persons:1, relCompos:null, focusSubject:null, gazeRel:null, groupCom
   dist:null, dir:null, height:null, tilt:null, focus:null, focusPlane:null, pose:null,
   lensEffect:null, framingDensity:null, camStability:null, gaze:null,
   cropAnchor:null, verticalPlacement:null,
+  fgSubject:null, fgPersonSize:null, fgPersonFocus:null,
   lockSet:false, aspectRatio:null, picks:{} };
 
 function getDistItem(id) {
@@ -1649,6 +1850,38 @@ function constraintSt(distId, dirId, heightId) {
     if (CONSTRAINTS[grpKey]) return CONSTRAINTS[grpKey];
   }
   return 'ok';
+}
+
+// 전경 구도 활성 여부
+function fgActive() {
+  return S.fgSubject && S.fgSubject !== 'fg_none';
+}
+// 전경 구도 기준 dist 상태
+function fgDistSt(distId) {
+  if(!fgActive()) return 'ok';
+  const fg = FG_SUBJECT.find(x=>x.id===S.fgSubject);
+  if(!fg) return 'ok';
+  if(fg.noDist.includes(distId)) return 'no';
+  if(fg.warnDist.includes(distId)) return 'warn';
+  if(fg.recDist.includes(distId)) return 'rec';
+  return 'ok';
+}
+// 전경 구도 기준 height 상태
+function fgHeightSt(heightId) {
+  if(!fgActive()) return 'ok';
+  const fg = FG_SUBJECT.find(x=>x.id===S.fgSubject);
+  if(!fg) return 'ok';
+  if(fg.noHeight.includes(heightId)) return 'no';
+  if(fg.warnHeight.includes(heightId)) return 'warn';
+  if(fg.recHeight.includes(heightId)) return 'rec';
+  return 'ok';
+}
+// 전경 구도 기준 tilt 상태
+function fgTiltSt(tiltId) {
+  if(!fgActive()) return 'ok';
+  const fg = FG_SUBJECT.find(x=>x.id===S.fgSubject);
+  if(!fg) return 'ok';
+  return fg.recTilt.includes(tiltId) ? 'rec' : 'ok';
 }
 function recKey() {
   if(!S.dist||!S.dir||!S.height) return null;
@@ -1716,11 +1949,21 @@ function renderDist() {
     <div class="dist-group">
       <div class="dist-group-label" style="color:${grp.color}">${grp.label}</div>
       <div class="dist-btns">
-        ${grp.items.map(it=>`
-          <div class="btn ${S.dist===it.id?'sel':''}" onclick="selectDist('${it.id}')">
+        ${grp.items.map(it=>{
+          const fgSt = fgDistSt(it.id);
+          const isNo   = fgSt==='no';
+          const isWarn = fgSt==='warn';
+          const isRec  = fgSt==='rec';
+          const tag = isNo   ? `<span class="ctag tag-no">전경충돌</span>`
+                    : isWarn ? `<span class="ctag tag-warn">전경주의</span>`
+                    : isRec  ? `<span class="ctag tag-ok">전경권장</span>`
+                    : '';
+          return `<div class="btn ${S.dist===it.id?'sel':''} ${isNo?'disabled':''}" onclick="${isNo?'':` selectDist('${it.id}')`}">
+            ${tag}
             <span class="la">${it.label}</span>
             <span class="su">${it.sub}</span>
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
       </div>
     </div>`).join('');
 }
@@ -1752,11 +1995,18 @@ function renderHeight() {
   g.innerHTML = HEIGHT_GROUPS.map(grp=>`
     <div style="grid-column:1/-1;font-size:9px;font-weight:700;color:${grp.color};text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;margin-top:4px">${grp.label}</div>
     ${grp.items.map(h=>{
-      const st = constraintSt(S.dist,S.dir,h.id);
-      const cls = st==='no'?'disabled ht-btn':(S.height===h.id?'sel ht-btn':(st==='warn'?'warn-state ht-btn':'ht-btn'));
-      const tagTxt = st==='no'?'충돌':st==='warn'?'주의':'';
-      const tagCls = st==='no'?'tag-no':'tag-warn';
-      return `<div class="btn ${cls}" onclick="selectHeight('${h.id}')">
+      const st   = constraintSt(S.dist,S.dir,h.id);
+      const fgSt = fgHeightSt(h.id);
+      const isNo   = st==='no' || fgSt==='no';
+      const isWarn = !isNo && (st==='warn' || fgSt==='warn');
+      const isRec  = !isNo && !isWarn && fgSt==='rec';
+      const cls = isNo?'disabled ht-btn':(S.height===h.id?'sel ht-btn':(isWarn?'warn-state ht-btn':'ht-btn'));
+      const tagTxt = isNo
+        ? (st==='no'?'충돌':'전경충돌')
+        : isRec ? '전경권장'
+        : isWarn ? (fgSt==='warn'?'전경주의':'주의') : '';
+      const tagCls = isNo?'tag-no': isRec?'tag-ok':'tag-warn';
+      return `<div class="btn ${cls}" onclick="${isNo?'':` selectHeight('${h.id}')`}">
         ${tagTxt?`<span class="ctag ${tagCls}">${tagTxt}</span>`:''}
         <span class="em">${h.em}</span>
         <span class="la">${h.label}</span>
@@ -1776,13 +2026,16 @@ function renderTilt() {
     const isNatural = t.natural.includes(S.height);
     const isWarn    = t.warn.includes(S.height);
     const isNo      = t.no.includes(S.height);
+    const fgRec     = fgActive() && fgTiltSt(t.id)==='rec';
     const cls = isNo ? 'disabled' : S.tilt===t.id ? 'sel' : isWarn ? 'warn-state' : '';
     const tag = isNo
       ? `<span class="ctag tag-no">불가</span>`
-      : isNatural
-        ? `<span class="ctag tag-ok">권장</span>`
-        : isWarn
-          ? `<span class="ctag tag-warn">주의</span>` : '';
+      : fgRec
+        ? `<span class="ctag tag-ok">전경권장</span>`
+        : isNatural
+          ? `<span class="ctag tag-ok">권장</span>`
+          : isWarn
+            ? `<span class="ctag tag-warn">주의</span>` : '';
     return `<div class="btn ${cls}" onclick="${isNo?'':` selectTilt('${t.id}')`}">
       ${tag}
       <span class="em">${t.em}</span>
@@ -1803,7 +2056,18 @@ function renderFocus() {
   const c = document.getElementById('focusChips');
   if(!S.dist||!S.dir||!S.height){g.innerHTML='';c.innerHTML='';return;}
 
+  // 전경 구도 활성 시 포커스 포인트 잠금
+  const fgOn = fgActive();
+
   g.innerHTML = FOCUS.map(f=>{
+    if(fgOn) {
+      return `<div class="btn disabled">
+        <span class="ctag tag-no">전경잠금</span>
+        <span class="em">${f.em}</span>
+        <span class="la">${f.label}</span>
+        <span class="su">${f.sub}</span>
+      </div>`;
+    }
     const hasSoftDir = f.softDir && f.softDir !== S.dir;
     const hasSoftHt  = f.softHeight && f.softHeight !== S.height;
     const needsHint  = hasSoftDir || hasSoftHt;
@@ -1856,16 +2120,26 @@ function renderLens() {
   const c = document.getElementById('lensChips');
   if(!g) return;
 
+  const fgOn = fgActive();
   // 높이 그룹 기반 렌즈 권장
   const hGrp = heightGroup(S.height);
   const isVeryLow = S.height === 'ground' || S.height === 'ankle';
-  const rec = isVeryLow ? 'persp_dist' : hGrp==='low' ? 'persp_dist' : hGrp==='high' ? 'compression' : null;
+  const rec = fgOn ? 'persp_dist'
+    : isVeryLow ? 'persp_dist' : hGrp==='low' ? 'persp_dist' : hGrp==='high' ? 'compression' : null;
+
+  // fg 활성 시 compression 잠금 — 전경+배경 거리감 사라짐
+  if(fgOn && S.lensEffect==='compression') {
+    S.lensEffect = null;
+    Object.keys(S.picks).forEach(k=>{ if(k.startsWith('lens_chip_')) delete S.picks[k]; });
+  }
 
   g.innerHTML = LENS_EFFECT.map(le=>{
+    const isLocked = fgOn && le.id==='compression';
     const isRec = le.id === rec;
-    const cls = S.lensEffect===le.id ? 'sel' : '';
-    const tag = isRec ? `<span class="ctag tag-ok">${le.usage}</span>` : '';
-    return `<div class="btn ${cls}" onclick="selectLens('${le.id}')" title="${le.usage||''}">
+    const cls = isLocked ? 'disabled' : (S.lensEffect===le.id ? 'sel' : '');
+    const tag = isLocked ? `<span class="ctag tag-no">전경충돌</span>`
+      : isRec ? `<span class="ctag tag-ok">${fgOn?'전경권장':le.usage}</span>` : '';
+    return `<div class="btn ${cls}" onclick="${isLocked?'':` selectLens('${le.id}')`}" title="${le.usage||''}">
       ${tag}
       <span class="em">${le.em}</span>
       <span class="la">${le.label}</span>
@@ -2209,11 +2483,96 @@ function renderPersons() {
   }
 }
 
+function renderFgComp() {
+  const sg = document.getElementById('fgSubjectGrid');
+  const banner = document.getElementById('fgBanner');
+  const subOpts = document.getElementById('fgSubOptions');
+  const lockNotice = document.getElementById('fgLockNotice');
+  if(!sg) return;
+
+  sg.innerHTML = FG_SUBJECT.map(fs=>{
+    const isSel = S.fgSubject===fs.id;
+    const isNone = fs.id==='fg_none';
+    return `<div class="btn ${isSel?'sel':''}" onclick="selectFgSubject('${fs.id}')">
+      <span class="em">${fs.em}</span>
+      <span class="la">${fs.label}</span>
+      <span class="su">${fs.sub}</span>
+    </div>`;
+  }).join('');
+
+  const on = fgActive();
+  banner.classList.toggle('show', on);
+  subOpts.style.display = on ? '' : 'none';
+
+  if(on) {
+    // 배경 인물 크기
+    const psg = document.getElementById('fgPersonSizeGrid');
+    if(psg) psg.innerHTML = FG_PERSON_SIZE.map(ps=>`
+      <div class="btn ${S.fgPersonSize===ps.id?'sel':''}" onclick="selectFgPersonSize('${ps.id}')">
+        <span class="em">${ps.em}</span>
+        <span class="la">${ps.label}</span>
+        <span class="su">${ps.sub}</span>
+      </div>`).join('');
+
+    // 배경 인물 포커스
+    const pfg = document.getElementById('fgPersonFocusGrid');
+    if(pfg) pfg.innerHTML = FG_PERSON_FOCUS.map(pf=>`
+      <div class="btn ${S.fgPersonFocus===pf.id?'sel':''}" onclick="selectFgPersonFocus('${pf.id}')">
+        <span class="em">${pf.em}</span>
+        <span class="la">${pf.label}</span>
+        <span class="su">${pf.sub}</span>
+      </div>`).join('');
+
+    // 현재 dist/height 충돌 안내
+    const fg = FG_SUBJECT.find(x=>x.id===S.fgSubject);
+    const notices = [];
+    if(S.dist && fg.noDist.includes(S.dist)) notices.push(`⚠ 현재 거리(${S.dist})가 이 전경 구도와 충돌합니다`);
+    if(S.height && fg.noHeight.includes(S.height)) notices.push(`⚠ 현재 높이(${S.height})가 이 전경 구도와 충돌합니다`);
+    if(notices.length) {
+      lockNotice.textContent = notices.join(' · ');
+      lockNotice.classList.add('show');
+    } else {
+      lockNotice.classList.remove('show');
+    }
+  } else {
+    lockNotice.classList.remove('show');
+  }
+}
+
+function selectFgSubject(id) {
+  if(S.fgSubject===id || id==='fg_none') {
+    S.fgSubject=null; S.fgPersonSize=null; S.fgPersonFocus=null;
+    // fg 해제 시 잠겼던 focus도 복구 (이미 null이므로 그냥 재렌더)
+  } else {
+    S.fgSubject=id;
+    // fg 활성 시 기존 focus 선택 해제 (충돌)
+    S.focus=null;
+    Object.keys(S.picks).forEach(k=>{ if(k.startsWith('focus_chip_')) delete S.picks[k]; });
+    S.focusPlane=null;
+    // compression 렌즈 해제
+    if(S.lensEffect==='compression') {
+      S.lensEffect=null;
+      Object.keys(S.picks).forEach(k=>{ if(k.startsWith('lens_chip_')) delete S.picks[k]; });
+    }
+  }
+  update();
+}
+function selectFgPersonSize(id) {
+  S.fgPersonSize = S.fgPersonSize===id ? null : id;
+  renderFgComp(); updatePrompt();
+}
+function selectFgPersonFocus(id) {
+  S.fgPersonFocus = S.fgPersonFocus===id ? null : id;
+  renderFgComp(); updatePrompt();
+}
+
 function resetAll() {
   S.persons=1; S.relCompos=null; S.focusSubject=null; S.gazeRel=null; S.groupCompos=null;
   S.dist=null;S.dir=null;S.height=null;S.tilt=null;
   S.focus=null;S.focusPlane=null;S.pose=null;
   S.lensEffect=null;S.framingDensity=null;S.camStability=null;S.gaze=null;
+  S.cropAnchor=null;S.verticalPlacement=null;
+  S.fgSubject=null;S.fgPersonSize=null;S.fgPersonFocus=null;
   S.lockSet=false;S.aspectRatio=null;
   S.picks={};
   update();
@@ -2225,7 +2584,7 @@ function update() {
   document.getElementById('pTilt').classList.toggle('locked',!S.dist||!S.dir||!S.height);
   document.getElementById('pFocus').classList.toggle('locked',!S.dist||!S.dir||!S.height);
   document.getElementById('pRec').classList.toggle('locked',!S.dist||!S.dir||!S.height);
-  renderPersons();
+  renderPersons(); renderFgComp();
   renderDist(); renderDir(); renderHeight(); renderTilt(); renderFocus(); renderRec();
   renderAR(); renderLockSet();
   updateFlow(); updatePrompt();
@@ -2287,9 +2646,16 @@ function buildPrompt() {
   if(S.lockSet) LOCK_SET_PROMPTS.forEach(p=>parts.push(p));
 
   // ── GROUP E: EMPHASIS (무엇을 강조할지)
-  if(S.focus){const f=FOCUS.find(x=>x.id===S.focus);if(f)parts.push(f.prompt);}
-  if(S.gaze){const gz=GAZE.find(x=>x.id===S.gaze);if(gz)parts.push(gz.prompt);}
-
+  // 전경 구도 활성 시 fg 프롬프트 삽입 (기존 FOCUS 대체)
+  if(fgActive()) {
+    const fg = FG_SUBJECT.find(x=>x.id===S.fgSubject);
+    if(fg) parts.push(fg.prompt);
+    if(S.fgPersonSize){const ps=FG_PERSON_SIZE.find(x=>x.id===S.fgPersonSize);if(ps)parts.push(ps.prompt);}
+    if(S.fgPersonFocus){const pf=FG_PERSON_FOCUS.find(x=>x.id===S.fgPersonFocus);if(pf)parts.push(pf.prompt);}
+  } else {
+    if(S.focus){const f=FOCUS.find(x=>x.id===S.focus);if(f)parts.push(f.prompt);}
+    if(S.gaze){const gz=GAZE.find(x=>x.id===S.gaze);if(gz)parts.push(gz.prompt);}
+  }
   // ── 나머지 (포커스 플레인, 렌즈, 포즈, 안정성, 픽스)
   if(S.focusPlane){const fp=FOCUS_PLANE.find(x=>x.id===S.focusPlane);if(fp)parts.push(fp.prompt);}
   if(S.lensEffect){const le=LENS_EFFECT.find(x=>x.id===S.lensEffect);if(le)parts.push(le.prompt);}
@@ -2318,6 +2684,9 @@ function buildDisplay() {
   if(S.verticalPlacement){const vp=VERTICAL_PLACEMENT.find(x=>x.id===S.verticalPlacement);if(vp)parts.push(vp.kr||vp.prompt);}
   if(S.camStability){const cs=CAM_STABILITY.find(x=>x.id===S.camStability);if(cs)parts.push(cs.kr||cs.prompt);}
   Object.values(S.picks).forEach(v=>parts.push(KR_MAP[v]||v));
+  if(fgActive()){const fg=FG_SUBJECT.find(x=>x.id===S.fgSubject);if(fg)parts.push(fg.kr||fg.prompt);}
+  if(S.fgPersonSize){const ps=FG_PERSON_SIZE.find(x=>x.id===S.fgPersonSize);if(ps)parts.push(ps.kr||ps.prompt);}
+  if(S.fgPersonFocus){const pf=FG_PERSON_FOCUS.find(x=>x.id===S.fgPersonFocus);if(pf)parts.push(pf.kr||pf.prompt);}
   if(S.lockSet) parts.push('거리 고정 세트 (Distance Lock + Foreground Anchor + Depth Separation)');
   if(S.aspectRatio){const ar=ASPECT_RATIO.find(x=>x.id===S.aspectRatio);if(ar)parts.push(ar.kr||ar.prompt);}
   return parts.join(', ');
@@ -2424,6 +2793,9 @@ function updatePrompt() {
   if(S.lensEffect){const le=LENS_EFFECT.find(x=>x.id===S.lensEffect);if(le)tagItems.push(le.label);}
   if(S.framingDensity){const fd=FRAMING_DENSITY.find(x=>x.id===S.framingDensity);if(fd)tagItems.push(fd.label);}
   if(S.camStability){const cs=CAM_STABILITY.find(x=>x.id===S.camStability);if(cs)tagItems.push(cs.label);}
+  if(fgActive()){const fg=FG_SUBJECT.find(x=>x.id===S.fgSubject);if(fg)tagItems.push(`🎭${fg.label}`);}
+  if(S.fgPersonSize){const ps=FG_PERSON_SIZE.find(x=>x.id===S.fgPersonSize);if(ps)tagItems.push(`배경:${ps.label}`);}
+  if(S.fgPersonFocus){const pf=FG_PERSON_FOCUS.find(x=>x.id===S.fgPersonFocus);if(pf)tagItems.push(pf.label);}
   if(S.lockSet) tagItems.push('🔒거리고정세트');
   if(S.aspectRatio){const ar=ASPECT_RATIO.find(x=>x.id===S.aspectRatio);if(ar)tagItems.push(`AR:${ar.label}`);}  tags.innerHTML=tagItems.map(t=>`<span class="sel-tag">${t}</span>`).join('');
 }
@@ -2438,9 +2810,8 @@ function copyPrompt() {
   }
   navigator.clipboard.writeText(final).then(()=>{
     const b=document.getElementById('copyBtn');
-    const origHTML = b.innerHTML;
-    b.innerHTML='✅ 복사됨!';
-    setTimeout(()=>{ b.innerHTML=origHTML; },2000);
+    b.textContent='✅ 복사됨!';
+    setTimeout(()=>{b.textContent='📋 복사';},2000);
   });
 }
 
@@ -2469,38 +2840,100 @@ const KR_MAP = {};
 
 update();
 
-// ── postMessage 브릿지 (통합 피커와 통신) ──
+// ── postMessage 브릿지 (통합 피커와 통신) ─────────────────────────────────────
+//
+// 변환 테이블: v17 세분화 id → index2(조명 피커) 기대값
+//
+// [HEIGHT] v17의 세분 높이 id → index2 CAM_CONSTRAINTS / CAM_PROMPT_INJECT 키
+//   index2가 이해하는 값: 'ground' | 'eye' | 'overhead'
+const BRIDGE_HEIGHT = {
+  ground:      'ground',
+  ankle:       'ground',
+  knee:        'ground',
+  chest:       'eye',
+  eye:         'eye',
+  head:        'eye',
+  gentle_high: 'overhead',
+  mid_high:    'overhead',
+  elevated:    'overhead',
+  overhead:    'overhead',
+};
+
+// [DIST → FRAME] v17 dist id → index2 CAM_FRAME_CONSTRAINT 키
+//   index2가 이해하는 값: 'ecu' | 'cu' | 'ms' | 'fs' | 'ws'
+const BRIDGE_FRAME = {
+  macro:         'ecu',
+  ecu:           'ecu',
+  tight:         'cu',
+  headshot:      'cu',
+  portrait:      'cu',
+  bust:          'cu',
+  upperbody:     'ms',
+  waistup:       'ms',
+  medium:        'ms',
+  fullbody:      'fs',
+  dyn_low_full:  'fs',
+  dyn_high_full: 'fs',
+  envport:       'ws',
+  wide:          'ws',
+};
+
+// [DIR] v17 dir id → index2 CAM_CONSTRAINTS / setCamState 기대값
+//   index2가 이해하는 값: 'front' | 'side' | 'rear' | 'front-side'
+//   (front / side / rear 는 v17과 동일, diagonal만 변환)
+const BRIDGE_DIR = {
+  front:    'front',
+  side:     'side',
+  rear:     'rear',
+  diagonal: 'front-side',
+};
+
+// [TILT] v17 tilt id → index2 CAM_CONSTRAINTS 키 suffix
+//   index2가 이해하는 값: 'tilt_up' | 'tilt_down' | 'tilt_level'  ← v17과 동일
+const BRIDGE_TILT = {
+  tilt_up:    'tilt_up',
+  tilt_down:  'tilt_down',
+  tilt_level: 'tilt_level',
+};
+
+// 변환 함수: 현재 S 상태 → index2(setCamState)가 기대하는 payload 생성
+function buildSyncPayload() {
+  return {
+    height:  BRIDGE_HEIGHT[S.height]  || null,
+    dir:     BRIDGE_DIR[S.dir]        || null,
+    frame:   BRIDGE_FRAME[S.dist]     || null,   // index2는 frame 키로 받음
+    tilt:    BRIDGE_TILT[S.tilt]      || null,
+    persons: S.persons                || null,
+  };
+}
+
+// ── 수신 핸들러 ──
 window.addEventListener('message', function(e) {
   if (!e.data) return;
+  // 부모가 현재 프롬프트를 요청할 때
   if (e.data.type === 'CAM_GET_PROMPT') {
     parent.postMessage({ type: 'CAM_PROMPT', prompt: buildPrompt() }, '*');
   }
+  // 부모가 상태 동기화를 요청할 때 (단독↔분할 탭 전환 시)
+  if (e.data.type === 'CAM_GET_SYNC') {
+    parent.postMessage({ type: 'CAM_SYNC', payload: buildSyncPayload() }, '*');
+  }
+  // 리셋 명령
   if (e.data.type === 'CAM_RESET') resetAll();
 });
 
-// 선택 변경 시 부모에게 자동 전송
-// update()만 패치하면 selectSimple/togglePick/selectLens 등 updatePrompt()를 직접
-// 호출하는 경로가 누락되어 연출&포커스 이후 선택이 부모에 전달되지 않음.
-// updatePrompt()를 패치해야 모든 선택 경로를 커버할 수 있음.
-// CAM_SYNC payload는 index.html·index2.html이 실제로 사용하는 키만 명시적으로 추출
+// ── 발신 래퍼: 매 선택마다 CAM_PROMPT + CAM_SYNC 동시 발송 ──
 (function() {
-  const _origUpdatePrompt = updatePrompt;
+  var _orig = updatePrompt;
   updatePrompt = function() {
-    _origUpdatePrompt.apply(this, arguments);
+    _orig.apply(this, arguments);
     try {
-      const prompt = buildPrompt();
-      parent.postMessage({ type: 'CAM_PROMPT', prompt }, '*');
-      parent.postMessage({
-        type: 'CAM_SYNC',
-        payload: {
-          dir:     S.dir     || null,
-          height:  S.height  || null,
-          tilt:    S.tilt    || null,
-          dist:    S.dist    || null,
-          persons: S.persons || null,
-        }
-      }, '*');
-    } catch(_) {}
+      const payload = buildSyncPayload();
+      // 1) 프롬프트 — index.html preview bar 업데이트
+      parent.postMessage({ type: 'CAM_PROMPT', prompt: buildPrompt() }, '*');
+      // 2) 상태 동기화 — index.html → CAM_STATE → index2(setCamState) 연쇄 트리거
+      parent.postMessage({ type: 'CAM_SYNC',   payload: payload        }, '*');
+    } catch(e) {}
   };
 })();
 </script>
